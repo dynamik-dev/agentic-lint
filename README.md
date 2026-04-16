@@ -72,7 +72,18 @@ ln -sf ~/.agentic-lint/skills/agentic-lint-review  ~/.claude/skills/agentic-lint
 
 Project-scope alternative: replace `~/.claude/skills` with `.claude/skills` inside a project — the skills will only activate in that project.
 
-### 3. Register the PostToolUse hook
+### 3. Install the evaluator subagent
+
+Semantic evaluations are dispatched to a dedicated subagent that runs on Sonnet (cheaper than the parent session and isolated from its context). Symlink the agent definition:
+
+```bash
+mkdir -p ~/.claude/agents
+ln -sf ~/.agentic-lint/agents/agentic-lint-evaluator.md ~/.claude/agents/agentic-lint-evaluator.md
+```
+
+To change the model, edit the `model:` field in `~/.agentic-lint/agents/agentic-lint-evaluator.md` (`opus`, `sonnet`, or `haiku`). Heavier rules benefit from Sonnet; simple presence checks may run fine on Haiku.
+
+### 4. Register the PostToolUse hook
 
 Add this block to `~/.claude/settings.json` (applies across all projects):
 
@@ -93,11 +104,11 @@ Add this block to `~/.claude/settings.json` (applies across all projects):
 
 If you cloned somewhere other than `~/.agentic-lint`, substitute that path. Project-scope alternative: put the same block in `.claude/settings.json` at your project root.
 
-### 4. Restart Claude Code
+### 5. Restart Claude Code
 
-Start a new Claude Code session so it picks up the new skills and hook.
+Start a new Claude Code session so it picks up the new skills, agent, and hook.
 
-### 5. Verify the install
+### 6. Verify the install
 
 ```bash
 python3 ~/.agentic-lint/pipeline/pipeline.py --help
@@ -177,6 +188,7 @@ python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php --print-prompt
 
 ```bash
 rm ~/.claude/skills/agentic-lint{,-init,-author,-review}
+rm ~/.claude/agents/agentic-lint-evaluator.md
 # Then remove the PostToolUse block from ~/.claude/settings.json
 rm -rf ~/.agentic-lint
 ```
@@ -212,10 +224,12 @@ agentic-lint/
 │   ├── hook.sh          # PostToolUse hook entry point
 │   └── tests/           # 66 tests, stdlib-only
 ├── skills/
-│   ├── agentic-lint/          # interprets hook output
+│   ├── agentic-lint/          # interprets hook output, dispatches evaluator
 │   ├── agentic-lint-init/     # bootstraps .agentic-lint.yml
 │   ├── agentic-lint-author/   # adds, modifies, removes rules
 │   └── agentic-lint-review/   # audits rule health
+├── agents/
+│   └── agentic-lint-evaluator.md  # semantic eval subagent (Sonnet by default)
 ├── scripts/             # lint.sh, dogfood.sh
 ├── examples/            # sample configs
 └── .agentic-lint.yml    # this repo's own lint rules (dogfood)

@@ -38,41 +38,46 @@ Passed checks: rule-a, rule-b
 
 ### Handling Semantic Evaluation Requests
 
-When the hook injects a `hookSpecificOutput.additionalContext` that begins with **"AGENTIC LINT SEMANTIC EVALUATION REQUIRED"**, the script phase passed but the pipeline is asking you to judge the diff against semantic rules.
+When the hook injects a `hookSpecificOutput.additionalContext` that begins with **"AGENTIC LINT SEMANTIC EVALUATION REQUIRED"**, the script checks passed but the pipeline is asking you to judge the diff against semantic rules.
 
 The payload is a JSON object with these fields:
 
 - `file` -- the file that was modified.
 - `diff` -- a unified diff (for Edit) or a line-numbered snapshot (for Write). Line numbers are anchored to the file on disk so you can cite specific lines in violations.
-- `passed_checks` -- array of rule ids that the script phase already verified as passing. These checks are deterministic truth; do not re-investigate concerns already covered by a passed check.
+- `passed_checks` -- array of rule ids the deterministic script checks already verified as passing. Do not re-investigate concerns already covered.
 - `evaluate` -- array of `{id, description, severity}` objects. For semantic rules, the `description` IS the evaluation prompt.
 
-Evaluate each rule against the diff:
+**Do not evaluate the rules yourself.** Dispatch the `agentic-lint-evaluator` subagent and let it return the verdict. Offloading to the subagent runs the evaluation on a smaller model with an isolated context, which keeps your main session lean.
+
+Use the `Agent` tool with:
+
+- `subagent_type`: `agentic-lint-evaluator`
+- `description`: a 3-5 word summary like "Evaluate lint rules"
+- `prompt`: the literal `additionalContext` string the hook gave you (the entire payload, headers and all). The agent knows how to parse it.
+
+The agent returns text in this exact shape:
 
 ```
-Evaluate this diff from {file}.
-Passed (do not re-evaluate): {passed_checks}.
+VIOLATIONS:
+- [rule-id] line N: <what's wrong>
+  fix: <suggestion>
 
-Rules to evaluate:
-- [id-1] (severity): description
-- [id-2] (severity): description
-
-Diff:
-{diff}
-
-For each violation: rule id, line number (from the diff), description, fix suggestion.
-If no violations, state 'no violations' explicitly.
+NO_VIOLATIONS:
+- rule-id-a
+- rule-id-b
 ```
 
-Then act:
+Parse the `VIOLATIONS:` section. For each entry, look up the rule's severity from the original `evaluate` payload (the agent does not echo severity), then act:
 
-- **error severity**: Fix immediately using the Edit tool before making any other tool calls.
+- **error severity**: Fix the violation immediately using the Edit tool, applying the agent's `fix:` suggestion as a starting point. Do this before any other tool call.
 - **warning severity**: Note it in a single sentence, then continue the current task.
-- **no violations**: Proceed normally.
+- **empty `VIOLATIONS:` section**: Proceed normally.
+
+If the agent's response does not match the expected shape (missing headers, JSON, or prose-only), treat it as a transient failure: re-dispatch once with the same payload. If the second response is also malformed, fall back to evaluating the rules yourself against the diff using the same output format, then proceed.
 
 ### Using passed_checks correctly
 
-`passed_checks` lists rule ids the deterministic script phase already verified. Two implications:
+`passed_checks` lists rule ids the deterministic script checks already verified. Two implications:
 
 1. Do not re-investigate those concerns. If `no-compact` passed, the file does not contain `compact()` -- do not search for it.
 2. Use them to catch cross-rule interactions. If a script rule like `no-db-facade` passed but a semantic rule like `dependency-direction` is in the evaluation list, check whether the diff introduces an indirect `DB::` usage that the script rule would not catch.
