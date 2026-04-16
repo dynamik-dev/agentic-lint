@@ -38,29 +38,43 @@ Traditional linters fragment across tools (PHPStan, Pint, ESLint, Pest arch test
 
 `agentic-lint` collapses that into a single config the agent actually reads as part of its tool loop. Deterministic rules stay deterministic. Judgment rules live in natural language where the agent reads them directly.
 
+## Prerequisites
+
+- [Claude Code](https://claude.com/claude-code)
+- Python 3.10+ (`python3 --version`)
+- `jq` — the hook uses it for JSON parsing (`brew install jq` on macOS, standard on most Linux)
+
+No other runtime dependencies. The pipeline is stdlib-only Python; you do **not** `pip install` anything to use it.
+
 ## Install
 
+### 1. Clone somewhere stable
+
+The hook path has to be stable so Claude Code can find it every time. Pick a location and commit to it:
+
 ```bash
-pip install -e ".[dev]"
+git clone https://github.com/dynamik-dev/agentic-lint.git ~/.agentic-lint
 ```
 
-Pulls `pytest`, `ruff`, `shellcheck-py` (bundled binary), and `pre-commit`. The runtime itself is stdlib-only and needs no install.
+You can put it anywhere — `~/.agentic-lint`, `~/code/agentic-lint`, `/opt/agentic-lint`. Just use the same path in step 3.
 
-## Quick start
+### 2. Install the four skills
 
-### 1. Bootstrap a config
+Symlink each skill into your Claude Code skills directory so Claude picks them up:
 
-In a project you want to lint:
-
+```bash
+mkdir -p ~/.claude/skills
+ln -sf ~/.agentic-lint/skills/agentic-lint         ~/.claude/skills/agentic-lint
+ln -sf ~/.agentic-lint/skills/agentic-lint-init    ~/.claude/skills/agentic-lint-init
+ln -sf ~/.agentic-lint/skills/agentic-lint-author  ~/.claude/skills/agentic-lint-author
+ln -sf ~/.agentic-lint/skills/agentic-lint-review  ~/.claude/skills/agentic-lint-review
 ```
-> /agentic-lint-init
-```
 
-The init skill detects your stack, scans for existing linter configs, asks whether to migrate them as shell-outs or keep them in CI, and writes a baseline `.agentic-lint.yml`.
+Project-scope alternative: replace `~/.claude/skills` with `.claude/skills` inside a project — the skills will only activate in that project.
 
-### 2. Wire up the hook
+### 3. Register the PostToolUse hook
 
-In `.claude/settings.json`:
+Add this block to `~/.claude/settings.json` (applies across all projects):
 
 ```json
 {
@@ -69,7 +83,7 @@ In `.claude/settings.json`:
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "/path/to/agentic-lint/pipeline/hook.sh" }
+          { "type": "command", "command": "$HOME/.agentic-lint/pipeline/hook.sh" }
         ]
       }
     ]
@@ -77,13 +91,49 @@ In `.claude/settings.json`:
 }
 ```
 
+If you cloned somewhere other than `~/.agentic-lint`, substitute that path. Project-scope alternative: put the same block in `.claude/settings.json` at your project root.
+
+### 4. Restart Claude Code
+
+Start a new Claude Code session so it picks up the new skills and hook.
+
+### 5. Verify the install
+
+```bash
+python3 ~/.agentic-lint/pipeline/pipeline.py --help
+```
+
+You should see usage output. If Python errors out, your Python is older than 3.10 — check with `python3 --version`.
+
+That's install done. The pipeline sits silent until a project has a `.agentic-lint.yml`.
+
+## Quick start (per project)
+
+### 1. Bootstrap a config
+
+In a project you want to lint, start Claude Code and run:
+
+```
+> /agentic-lint-init
+```
+
+The init skill detects your stack, scans for existing linter configs, asks a couple of questions, and writes a baseline `.agentic-lint.yml` at your project root. Review it, tweak to taste, commit it.
+
+### 2. Make an edit
+
+Ask Claude to edit a file in the project. The hook fires on every `Edit` / `Write` tool call:
+
+- **No violations** — silent, the edit goes through.
+- **Error-severity script violation** — Claude's tool call is blocked, the violation text is fed back to Claude, and Claude fixes it before moving on.
+- **Semantic evaluation** — the pipeline hands Claude a diff + rule descriptions, and Claude evaluates them as part of its next turn.
+
 ### 3. Enable telemetry (optional)
 
 ```bash
 mkdir .agentic-lint
 ```
 
-The pipeline appends one JSONL record per run to `.agentic-lint/log.jsonl`. Removing the directory turns logging off.
+One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in `.gitignore` — per-developer data.
 
 ### 4. Review rule health
 
@@ -95,9 +145,7 @@ After a few hundred edits:
 
 Surfaces noisy rules (fire on most edits), dead rules (never fire), and slow rules. Recommends concrete adjustments.
 
-### 5. Author, modify, or remove rules
-
-To evolve the config without hand-editing YAML:
+### 5. Evolve the config
 
 ```
 > add a lint rule that bans var_dump() in PHP
@@ -106,27 +154,45 @@ To evolve the config without hand-editing YAML:
 > remove deprecated-carbon
 ```
 
-The `agentic-lint-author` skill walks through engine choice, drafts a rule, tests it against fixtures, and only then writes it to `.agentic-lint.yml`.
+The `agentic-lint-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.agentic-lint.yml`.
 
 ## Manual invocation
 
 For authoring and debugging rules without triggering an Edit:
 
 ```bash
-# Run the full pipeline against a file
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php
+PIPE=~/.agentic-lint/pipeline/pipeline.py
 
-# Run just one rule
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --rule no-compact
+# Full pipeline against a file
+python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php
+
+# Isolate one rule
+python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php --rule no-compact
 
 # See the semantic prompt that would be sent to the LLM
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --print-prompt
+python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php --print-prompt
 ```
 
-## Tooling
+## Uninstall
 
-- `scripts/lint.sh` — run all quality checks: ruff, shellcheck, pytest, dogfood.
-- `scripts/dogfood.sh` — run the pipeline against every source file in this repo.
+```bash
+rm ~/.claude/skills/agentic-lint{,-init,-author,-review}
+# Then remove the PostToolUse block from ~/.claude/settings.json
+rm -rf ~/.agentic-lint
+```
+
+## Development
+
+If you want to hack on agentic-lint itself:
+
+```bash
+cd ~/.agentic-lint
+pip install -e ".[dev]"   # pulls ruff, shellcheck-py, pytest, pre-commit
+bash scripts/lint.sh      # ruff + shellcheck + pytest + dogfood
+```
+
+- `scripts/lint.sh` — full quality gate.
+- `scripts/dogfood.sh` — runs the pipeline against every source file in this repo.
 - `.github/workflows/ci.yml` — the same checks on every PR.
 - `.pre-commit-config.yaml` — optional: `pre-commit install` to run checks before every commit.
 
