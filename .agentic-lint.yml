@@ -1,0 +1,72 @@
+rules:
+  stdlib-only:
+    description: >
+      pipeline.py and analyzer.py must stay stdlib-only. No imports of third-party
+      runtime packages. This is a hard invariant because the pipeline runs in the
+      Claude Code hook loop and cannot assume a virtualenv.
+    engine: script
+    scope: ["pipeline/pipeline.py", "pipeline/analyzer.py"]
+    severity: error
+    script: "grep -nE '^(import|from)[[:space:]]+(yaml|requests|click|rich|numpy|pandas|pydantic|toml|httpx|aiohttp)' {file} && exit 1 || exit 0"
+
+  no-bare-except:
+    description: "No bare `except:` -- catch specific exception classes."
+    engine: script
+    scope: "*.py"
+    severity: error
+    script: "grep -nE '^[[:space:]]*except:[[:space:]]*$' {file} && exit 1 || exit 0"
+
+  bash-strict-mode:
+    description: >
+      Bash scripts must enable strict mode (`set -euo pipefail`) within
+      the first five lines so errors, unset variables, and pipeline failures
+      surface immediately.
+    engine: script
+    scope: "*.sh"
+    severity: error
+    script: "head -5 {file} | grep -q 'set -euo pipefail' || exit 1"
+
+  skill-frontmatter:
+    description: >
+      Skill markdown files (SKILL.md) must start with YAML frontmatter so
+      Claude Code can parse the skill metadata.
+    engine: script
+    scope: "skills/*/SKILL.md"
+    severity: error
+    script: "head -1 {file} | grep -q '^---$' || exit 1"
+
+  no-orchestration-labels:
+    description: >
+      No sprint, wave, task, phase, v1, v2, or similar orchestration labels
+      in file names, class names, function names, or comments. Source code
+      must not carry project-management artifacts.
+    engine: semantic
+    scope: "*"
+    severity: error
+
+  todo-with-ticket:
+    description: >
+      TODO and FIXME comments must reference a ticket identifier (e.g.
+      `TODO(#123)` or `FIXME: ABC-45`). Unticketed TODOs rot silently.
+    engine: script
+    scope: ["*.py", "*.sh"]
+    severity: warning
+    script: "grep -nE '(TODO|FIXME)' {file} | grep -vE '(#[0-9]+|[A-Z]+-[0-9]+)' && exit 1 || exit 0"
+
+  no-print-in-pipeline-source:
+    description: >
+      In pipeline.py and analyzer.py, only `main()` should call `print()`.
+      Library-level code must return data or write to stderr, never print
+      directly -- callers (hooks, tests) need to consume the return value.
+    engine: semantic
+    scope: ["pipeline/pipeline.py", "pipeline/analyzer.py"]
+    severity: warning
+
+  tests-assert-real-behavior:
+    description: >
+      Tests should assert on specific return values, output fields, or
+      computed results. A test whose only assertion is `is not None`,
+      `== True`, or "it did not raise" is hollow and must be strengthened.
+    engine: semantic
+    scope: "pipeline/tests/test_*.py"
+    severity: warning

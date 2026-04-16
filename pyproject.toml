@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-lint"
+version = "0.1.0"
+description = "Agent-native linting pipeline for Claude Code"
+requires-python = ">=3.10"
+authors = [{ name = "dynamik-dev" }]
+# Runtime is deliberately stdlib-only. This list stays empty.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8.0",
+    "shellcheck-py>=0.10.0",
+    "pre-commit>=3.7",
+]
+
+[tool.setuptools]
+# This repo is a flat layout of runnable scripts (pipeline/pipeline.py,
+# pipeline/analyzer.py, pipeline/hook.sh). `pip install -e ".[dev]"`
+# installs dev tooling (ruff, shellcheck-py, pytest, pre-commit) without
+# pretending to be an importable package. Run scripts directly:
+#   python3 pipeline/pipeline.py ...
+#   python3 pipeline/analyzer.py ...
+packages = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["pipeline/.pytest_cache"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long -- not critical, formatter handles obvious cases
+    "SIM105", # contextlib.suppress: try/except is fine and stdlib-clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"pipeline/tests/*" = ["E402"]  # tests adjust sys.path before importing
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["pipeline/tests"]

@@ -1,0 +1,41 @@
+rules:
+  no-compact:
+    description: "Do not use compact() -- use explicit arrays"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'compact(' {file} && exit 1 || exit 0"
+  no-db-facade:
+    description: "Do not use DB:: facade -- use Model::query()"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'DB::' {file} && exit 1 || exit 0"
+  pint-formatting:
+    description: "Code must pass Laravel Pint formatting"
+    engine: script
+    scope: "*.php"
+    severity: warning
+    script: "vendor/bin/pint --test {file}"
+  inline-single-use-vars:
+    description: >
+      Inline variables that are only referenced once after assignment,
+      unless the variable name significantly clarifies intent that would
+      be lost by inlining.
+    engine: semantic
+    scope: "*.php"
+    severity: error
+  extract-complex-logic:
+    description: >
+      If a method contains a conditional block or loop body longer than
+      8 lines that performs a distinct sub-task, extract it to a named
+      helper method.
+    engine: semantic
+    scope: "*"
+    severity: error
+  js-no-console:
+    description: "Do not use console.log in production code"
+    engine: script
+    scope: "*.js"
+    severity: error
+    script: "grep -n 'console.log' {file} && exit 1 || exit 0"

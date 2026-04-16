@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Per-developer telemetry (see docs/telemetry.md)
+.agentic-lint/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+.ruff_cache/

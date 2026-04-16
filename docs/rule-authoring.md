@@ -1,0 +1,213 @@
+# Rule authoring
+
+How to write, scope, and test rules in `.agentic-lint.yml`.
+
+This doc covers the concepts. For the interactive flow — drafting a rule from a natural-language request, testing it against fixtures, and writing to the config — use the `agentic-lint-author` skill:
+
+```
+> add a lint rule that bans var_dump() in PHP
+> tighten no-db-facade -- it's noisy
+> remove deprecated-carbon
+```
+
+The skill applies the discipline described here. This doc is the reference; the skill is the workflow.
+
+## Pick an engine
+
+| Use a `script` rule when… | Use a `semantic` rule when… |
+|---------------------------|-----------------------------|
+| The violation is pattern-matchable (`grep`, `awk`, regex). | The violation requires judgment (e.g. "inline single-use variables"). |
+| You want deterministic, fast enforcement. | A mechanical rule would have too many false positives. |
+| You want the rule to work in CI without an LLM. | The rule depends on context (how a variable is used elsewhere). |
+| You're shelling out to an existing tool (phpstan, eslint, pint). | The rule is a prose style guideline. |
+
+If you can express it as grep, do. Script rules cost milliseconds. Semantic rules cost an LLM turn. A semantic rule that evaluates cleanly to the same mechanical fix over and over is a candidate for promotion to a script rule.
+
+## Script rule skeleton
+
+```yaml
+rule-id:
+  description: "One-sentence description."
+  engine: script
+  scope: "*.php"
+  severity: error   # or warning
+  script: "command {file}"
+```
+
+- `{file}` is replaced with the target file path.
+- The diff is available on stdin if the script reads it.
+- Exit 0 = pass. Exit non-zero = violation.
+- Stdout on failure should list violations. The pipeline parses common formats (see [Output formats](#output-formats)).
+- Each rule has a 30-second timeout.
+
+### Minimal grep pattern
+
+```yaml
+no-compact:
+  description: "Do not use compact() -- use explicit arrays"
+  engine: script
+  scope: "*.php"
+  severity: error
+  script: "grep -n 'compact(' {file} && exit 1 || exit 0"
+```
+
+The `&& exit 1 || exit 0` idiom inverts grep's default: non-zero when a match is found (violation), zero otherwise (pass).
+
+### Using negative lookahead (grep -P)
+
+```yaml
+todo-with-ticket:
+  description: "TODO/FIXME must reference a ticket id (#123 or ABC-45)"
+  engine: script
+  scope: "*"
+  severity: warning
+  script: "grep -nE '(TODO|FIXME)' {file} | grep -vE '(#[0-9]+|[A-Z]+-[0-9]+)' && exit 1 || exit 0"
+```
+
+### Header check
+
+```yaml
+bash-strict-mode:
+  description: "Bash scripts must set -euo pipefail in the first five lines"
+  engine: script
+  scope: "*.sh"
+  severity: error
+  script: "head -5 {file} | grep -q 'set -euo pipefail' || exit 1"
+```
+
+### Shelling out to an existing linter
+
+```yaml
+pint-formatting:
+  description: "Code must pass Laravel Pint formatting"
+  engine: script
+  scope: "*.php"
+  severity: warning   # slow external tool — prefer warning to avoid blocking every edit
+  script: "vendor/bin/pint --test {file}"
+```
+
+Slow shell-outs block the edit loop. Use `severity: warning` unless you are certain the tool runs quickly enough to run on every edit.
+
+## Semantic rule skeleton
+
+```yaml
+rule-id:
+  description: >
+    Full description that explains exactly what the rule enforces.
+    This text IS the evaluation prompt the LLM uses -- write it with
+    that in mind. Be specific about what counts as a violation.
+  engine: semantic
+  scope: "*.php"
+  severity: error
+```
+
+Key points:
+- No `script` field.
+- Description should be prescriptive: what counts as a violation, what the fix looks like.
+- Longer descriptions are fine when they disambiguate (use YAML folded scalars `>` for multi-line).
+- Think of the description as instructions to a careful reviewer, not as documentation for a human reader.
+
+### Well-scoped semantic rule
+
+```yaml
+inline-single-use-vars:
+  description: >
+    Inline variables that are only referenced once after assignment,
+    unless the variable name significantly clarifies intent that would
+    be lost by inlining. Example violation:
+      $result = $this->query->get(); return $result;
+    Example compliant:
+      return $this->query->get();
+  engine: semantic
+  scope: "*.php"
+  severity: error
+```
+
+Including an inline example tightens the LLM's interpretation without bloating the prompt. Keep it short.
+
+### Over-broad semantic rule (avoid)
+
+```yaml
+good-code:
+  description: "Code should be clean and maintainable"
+  engine: semantic
+  scope: "*"
+  severity: warning
+```
+
+This fires unpredictably. It is a noise source, not a rule. If you cannot describe a specific behavior that counts as a violation, the rule is not ready.
+
+## Scoping
+
+Scope is right-anchored glob matching via `PurePath.match`.
+
+| Pattern | Matches |
+|---------|---------|
+| `*.php` | any `.php` file at any depth |
+| `src/*.ts` | `.ts` files directly under `src/` |
+| `src/**/*.ts` | `.ts` files anywhere under `src/` |
+| `*` | everything |
+| `["*.php", "*.blade.php"]` | any file matching either glob |
+
+Scope narrowly. Broad scopes (like `"*"`) run more rules per edit and inflate the noise floor. Save `"*"` for truly cross-language rules like orchestration-label bans.
+
+## Output formats
+
+Script rules may print violations in several formats. The pipeline's adapter recognizes, in order:
+
+1. **JSON object** with `line`/`message` keys.
+2. **JSON array** of such objects.
+3. **`file:line:col: message`** — ESLint, Ruff, clang, PHPStan compact output.
+4. **`file:line: message`** — mypy, many compilers.
+5. **`line:content`** — `grep -n` and similar.
+6. **Anything else** — the raw output becomes the violation description (truncated to 500 chars). No output is dropped silently.
+
+Prefer formats that include a line number. Violations with line numbers are more actionable for the agent.
+
+## Testing a rule
+
+Without triggering an Edit, run the pipeline manually:
+
+```bash
+# Full pipeline against a file
+python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php
+
+# Just one rule (isolate it)
+python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --rule no-compact
+
+# See the semantic evaluation prompt without calling an LLM
+python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --print-prompt
+
+# Supply a diff manually (bypasses stdin/file-state inference)
+python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --diff "$(git diff src/foo.php)"
+```
+
+Exit codes:
+
+- `0` — pass or evaluate. Stdout is JSON.
+- `1` — usage error.
+- `2` — blocked. Stderr is agent-readable text; stdout is JSON.
+
+Combine `--rule` with `--print-prompt` while iterating on a semantic rule's description: you see exactly what the LLM would be asked, without spending a turn.
+
+## Severity choice
+
+- **error** — blocks the edit via exit 2. Use for correctness invariants: banned patterns, type safety, architectural boundaries, critical formatting.
+- **warning** — reported but non-blocking. Use for:
+  - New rules being trialed (promote to error once confidence is high).
+  - Slow external linters (pint, phpstan) where the signal matters but blocking every edit is too costly.
+  - Style preferences where a violation is not strictly wrong.
+
+Promotion pathway: start a new rule as `warning`. Run it for a few hundred edits. Check the `agentic-lint-review` report. If the violation rate is low and fixes are clean, promote to `error`. If noisy or flapping, adjust the rule or keep it a warning.
+
+## Rule quality checklist
+
+Before committing a new rule, verify:
+
+- [ ] The description reads as a clear instruction, not as project documentation.
+- [ ] The scope is as narrow as possible.
+- [ ] For script rules: the command exits 0 on a clean file and non-zero on a violation.
+- [ ] For semantic rules: the description includes at least one example of a violation and one compliant alternative, or is so specific that examples are redundant.
+- [ ] The id is unique and uses `kebab-case`.
+- [ ] The severity matches intent (error blocks; warning reports).
+- [ ] The rule has been tested with `--rule` against both a clean and a violating file.

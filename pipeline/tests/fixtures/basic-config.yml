@@ -1,0 +1,15 @@
+rules:
+  no-compact:
+    description: "Do not use compact() -- use explicit arrays"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'compact(' {file} && exit 1 || exit 0"
+  inline-single-use-vars:
+    description: >
+      Inline variables that are only referenced once after assignment,
+      unless the variable name significantly clarifies intent that would
+      be lost by inlining.
+    engine: semantic
+    scope: "*.php"
+    severity: error

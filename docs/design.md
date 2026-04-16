@@ -1,0 +1,271 @@
+# Design
+
+`agentic-lint` is a Claude Code skill system that enforces project coding standards through a two-phase evaluation pipeline: deterministic script checks for pattern-matchable rules, followed by LLM semantic evaluation for judgment-based rules. It fires on every `Edit` and `Write` tool call via the `PostToolUse` hook.
+
+## Core principles
+
+- **Agent-first.** The primary consumer is an AI coding agent in its tool loop. Not a CLI for humans (though a CLI exists for authoring and CI).
+- **Language-agnostic.** PHP, TypeScript, Rust, Python, Go, Ruby — anything. Rules are scoped by file glob, not by language declaration.
+- **Hard gate.** Error-severity violations block the tool call via exit code 2. The agent must fix the code before proceeding. Warning severity is reported but non-blocking.
+- **Hybrid evaluation.** Deterministic scripts handle what is greppable. The LLM handles judgment calls. Scripts are a fast pre-filter; the LLM always sees code that passed the script phase.
+- **Replaces the tool zoo.** One config file, one enforcement point, one violation format. Replaces fragmenting rules across PHPStan, Pint, ESLint, Pest arch tests, and prose in CLAUDE.md.
+- **Self-improving over time.** Every run appends a record to a telemetry log. A review skill surfaces noisy, dead, and slow rules so the config can evolve with the codebase.
+
+## Rule format
+
+Rules live in `.agentic-lint.yml` at the project root.
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | yes | Unique identifier. Used in violation payloads and `passed_checks` context. |
+| `description` | yes | What the rule enforces. Natural language. For semantic rules, this IS the evaluation prompt. |
+| `engine` | yes | `script` or `semantic`. |
+| `scope` | yes | File glob or list of globs this rule applies to. See [Scope](#scope). |
+| `severity` | yes | `error` (blocks) or `warning` (reported, non-blocking). |
+| `script` | script engine only | Shell command to run. `{file}` is replaced with the file path. Diff provided on stdin. Exit non-zero on violation. |
+
+### Scope
+
+Scope accepts either a single glob or a list of globs. The rule runs when any glob matches.
+
+```yaml
+scope: "*.php"                    # single glob
+scope: "src/**/*.ts"              # pathed glob
+scope: ["*.php", "*.blade.php"]   # list of globs
+scope: "*"                        # everything
+```
+
+Matching is right-anchored (`PurePath.match`): `*.php` matches any `.php` file at any depth, `src/*.ts` matches `.ts` files directly under `src/`.
+
+### Example
+
+```yaml
+rules:
+  no-compact:
+    description: "Do not use compact() -- use explicit arrays"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'compact(' {file} && exit 1 || exit 0"
+
+  bash-strict-mode:
+    description: "Bash scripts must set -euo pipefail"
+    engine: script
+    scope: ["*.sh", "scripts/*"]
+    severity: error
+    script: "head -5 {file} | grep -q 'set -euo pipefail' || exit 1"
+
+  inline-single-use-vars:
+    description: >
+      Inline variables that are only referenced once after assignment,
+      unless the variable name significantly clarifies intent that would
+      be lost by inlining.
+    engine: semantic
+    scope: "*.php"
+    severity: error
+```
+
+### Design decisions
+
+- **No `fix` field.** The agent figures out the fix from the violation description. Prescribed fixes couple the rule to a specific transformation and become brittle.
+- **No rule dependencies or ordering.** Rules are independent. If two rules interact, the LLM sees both via the `passed_checks` context.
+- **No `language` field.** Scope globs handle targeting.
+
+## Evaluation pipeline
+
+```
+PostToolUse fires (Edit or Write)
+       |
+       v
+  hook.sh walks up to find .agentic-lint.yml
+       |
+       v
+  pipeline.py receives JSON payload
+  (tool_name, file_path, old_string, new_string)
+       |
+       v
+  build_diff_context:
+    - Edit → unified diff with file-anchored line numbers
+    - Write → full file content, line-numbered
+       |
+       v
+  filter rules by scope glob
+       |
+       +-- No matching rules? --> exit 0 (pass)
+       |
+       v
+  Phase 1: run script rules (per-rule 30s timeout)
+       |
+       +-- Any error-severity violations?
+       |     --> print text to stderr
+       |         exit 2 (blocks the tool call)
+       |
+       v
+  Phase 2: build semantic evaluation payload
+       - file, diff (line-numbered)
+       - passed_checks (script rule IDs that passed)
+       - evaluate (rule IDs, descriptions, severities)
+       |
+       v
+  hook.sh injects payload via additionalContext
+  agent's Edit/Write continues; agentic-lint skill
+  evaluates the payload on the next turn
+       |
+       v
+  Append telemetry record to .agentic-lint/log.jsonl
+  (if directory exists)
+```
+
+### Diff construction
+
+The pipeline synthesizes the pre-edit file state so it can emit a unified diff with line numbers anchored to the real file on disk.
+
+- **Edit**: reads the current file, replaces `new_string` with `old_string` (first occurrence) to reconstruct the before state, then `difflib.unified_diff(...)` with five lines of context. Line numbers in the diff are real, so the agent can cite them in violations.
+- **Write**: emits the full file content with each line prefixed `NNNN:`. Line numbers remain usable for citing violations.
+- **Fallback**: if `new_string` cannot be found in the file (e.g. a subsequent edit already replaced it), the pipeline emits a best-effort synthetic diff of the strings alone.
+
+### Script output adapters
+
+Script rules may print violations in several formats. `parse_script_output` recognizes:
+
+1. JSON object or array with `line`/`message` keys.
+2. `file:line:col: message` (ESLint, Ruff, clang, PHPStan compact output).
+3. `file:line: message` (mypy, many compilers).
+4. `line:content` (grep -n and similar).
+5. Anything else — one violation with the raw output as the description.
+
+Unrecognized output is never dropped silently.
+
+### Exit code contract
+
+| Status | stdout | stderr | exit code | Meaning |
+|--------|--------|--------|-----------|---------|
+| `pass` | JSON result | — | 0 | No matching rules, or all rules passed. |
+| `evaluate` | JSON payload | — | 0 | Script phase passed; semantic payload is ready. |
+| `blocked` | JSON result | Agent-readable text | 2 | Error-severity script violation. Tool call is blocked. |
+
+Claude Code treats `exit 2` on a `PostToolUse` hook as a blocking signal and surfaces stderr to the agent.
+
+### Short-circuit behavior
+
+- No matching rules for the file: pipeline returns `pass` immediately.
+- Script phase finds error-severity violations: phase 2 is skipped (fix the obvious stuff first).
+- No semantic rules for this file type: phase 2 is skipped, pipeline returns `pass`.
+
+### Violation payload (blocked)
+
+```json
+{
+  "status": "blocked",
+  "file": "src/Stores/EloquentRoleStore.php",
+  "violations": [
+    {
+      "rule": "no-compact",
+      "engine": "script",
+      "severity": "error",
+      "line": 42,
+      "description": "return compact('result');",
+      "suggestion": null
+    }
+  ],
+  "passed": ["no-db-facade", "strict-types"]
+}
+```
+
+### Semantic payload (evaluate)
+
+```json
+{
+  "status": "evaluate",
+  "file": "src/Evaluators/CachedEvaluator.php",
+  "diff": "--- src/Evaluators/CachedEvaluator.php.before\n+++ src/Evaluators/CachedEvaluator.php.after\n@@ -28,6 +28,11 @@\n...",
+  "passed_checks": ["no-compact", "no-db-facade"],
+  "evaluate": [
+    {
+      "id": "inline-single-use-vars",
+      "description": "Inline variables that are only referenced once after assignment...",
+      "severity": "error"
+    }
+  ]
+}
+```
+
+The `passed_checks` list is load-bearing. It tells the LLM which concerns have already been verified deterministically — so the LLM does not re-investigate them, and so it can catch cross-rule interactions the scripts miss independently.
+
+## Telemetry and self-improvement
+
+Telemetry is opt-in: the pipeline writes to `.agentic-lint/log.jsonl` only when that directory exists next to the config.
+
+Each record:
+
+```json
+{
+  "ts": "2026-04-16T18:00:00Z",
+  "file": "src/Foo.php",
+  "status": "blocked",
+  "latency_ms": 20,
+  "rules": [
+    {"id": "no-compact", "engine": "script", "verdict": "violation", "severity": "error", "line": 15, "latency_ms": 9},
+    {"id": "no-db-facade", "engine": "script", "verdict": "pass",      "severity": "error", "latency_ms": 6},
+    {"id": "inline-single-use-vars", "engine": "semantic", "verdict": "evaluate_requested", "severity": "error"}
+  ]
+}
+```
+
+The `agentic-lint-review` skill runs `analyzer.py` over this log and classifies each rule as **noisy** (violation rate above threshold), **dead** (never fired in the window), or **slow** (mean latency above threshold). See [telemetry.md](telemetry.md).
+
+## Stack detection and baseline generation
+
+The `agentic-lint-init` skill bootstraps the project config. Run once.
+
+### Detection
+
+Scans the project root for manifest files. Detection reads specific version and framework information (e.g. `composer.json` with `laravel/framework` at `^12.0` and `php: ^8.4`), and that specificity shapes the baseline.
+
+### Migration (rules, not binaries)
+
+Before generating baselines, the init skill scans for existing linting config and extracts rules where possible. For heavyweight linters (PHPStan, ESLint, Ruff, Biome, Clippy, Pint), it asks the user whether to:
+
+1. Migrate rules natively (script or semantic — pipeline stays fast).
+2. Shell out from the pipeline (slower, requires binary installed everywhere the agent runs).
+3. Leave the linter in CI or pre-commit and skip the pipeline integration.
+
+Only on choice (2) does the init skill add a shell-out script rule, and it does so with `severity: warning` by default to avoid blocking every edit on a slow external tool.
+
+### Baselines
+
+Agent-native by default: grep/awk primitives and semantic rules. External linter shell-outs are opt-in. The baseline set is deliberately minimal — 5-10 rules total, not per-language.
+
+## CLAUDE.md integration
+
+`.agentic-lint.yml` is the primary config. CLAUDE.md is a secondary rule source during init.
+
+- **Init-time migration, not runtime parsing.** The `agentic-lint-init` skill reads CLAUDE.md once during bootstrap, extracts structured style rules, and migrates them into `.agentic-lint.yml`. At runtime, the pipeline reads only the YAML.
+- **Deduplication at init time.** The init skill compares migrated CLAUDE.md rules against rules it generated from other sources and deduplicates before writing the YAML.
+- **CLAUDE.md stays readable.** The init skill does not strip rules from CLAUDE.md. Those rules still serve as human-readable documentation; they stop being the enforcement mechanism.
+- **No magic parsing.** The init skill looks for structured sections (bulleted lists under headings like "Style Rules", "Conventions", "Coding Standards") and treats each bullet as a candidate rule. Unstructured prose is ignored.
+
+## What this replaces
+
+For a Laravel package:
+
+**Eliminated entirely:**
+- Pest arch tests (namespace boundaries, contract enforcement, dependency direction).
+- CLAUDE.md style rules as an enforcement mechanism (migrated to YAML; prose stays as documentation).
+
+**Kept but demoted (optional, opt-in):**
+- Pint: can still run via a script rule, or stay in pre-commit/CI.
+- PHPStan: same.
+
+For a different stack (Next.js, Rust CLI, Django), the same pipeline with different YAML rules replaces that stack's equivalent fragmented tooling. Same shape, different rules.
+
+## Skills
+
+Four skills cover the lifecycle:
+
+- **`agentic-lint-init`** — bootstraps `.agentic-lint.yml` once per project (zero → something).
+- **`agentic-lint`** — interprets hook output (blocked text or semantic evaluation payload) during every Edit/Write cycle. Not user-invocable.
+- **`agentic-lint-author`** — adds, modifies, or removes rules. Tests every rule against a fixture before writing to the config. User-invocable.
+- **`agentic-lint-review`** — audits rule health from the telemetry log and hands concrete recommendations off to the author skill. User-invocable.

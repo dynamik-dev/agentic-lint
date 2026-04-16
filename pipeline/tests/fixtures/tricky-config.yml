@@ -1,0 +1,26 @@
+rules:
+  quoted-colon:
+    description: "Rule: with a colon in description"  # inline comment
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'foo: bar' {file} && exit 1 || exit 0"
+
+  multi-scope:
+    description: "Matches multiple extensions"
+    engine: script
+    scope: ["*.php", "*.ts", "*.js"]
+    severity: warning
+    script: "exit 0"
+
+  unquoted-value:
+    description: Plain unquoted description
+    engine: semantic
+    scope: "*"
+    severity: error
+
+  mixed-quotes:
+    description: 'Single quoted with "embedded doubles"'
+    engine: semantic
+    scope: "*.md"
+    severity: warning

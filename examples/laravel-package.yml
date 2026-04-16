@@ -1,0 +1,87 @@
+rules:
+  no-compact:
+    description: "Do not use compact() -- use explicit arrays"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'compact(' {file} && exit 1 || exit 0"
+
+  no-db-facade:
+    description: "Do not use DB:: facade -- use Model::query()"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -n 'DB::' {file} && exit 1 || exit 0"
+
+  no-event-helper:
+    description: "Do not use event() helper -- use Event::dispatch()"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -nP '(?<![a-zA-Z_])event\\(' {file} && exit 1 || exit 0"
+
+  strict-types:
+    description: "All PHP files must declare strict_types=1"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "head -5 {file} | grep -q 'declare(strict_types=1)' || exit 1"
+
+  no-consecutive-line-comments:
+    description: "Use block comments (/* */) instead of consecutive // comments"
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "awk '/^[[:space:]]*\\/\\// {if(prev) {print NR\": consecutive // comment\"; exit 1} prev=1; next} {prev=0}' {file}"
+
+  pint-formatting:
+    description: "Code must pass Laravel Pint formatting"
+    engine: script
+    scope: "*.php"
+    severity: warning
+    script: "vendor/bin/pint --test {file} 2>/dev/null"
+
+  inline-single-use-vars:
+    description: >
+      Inline variables that are only referenced once after assignment,
+      unless the variable name significantly clarifies intent that
+      would be lost by inlining.
+    engine: semantic
+    scope: "*.php"
+    severity: error
+
+  extract-complex-logic:
+    description: >
+      If a method contains a conditional block or loop body longer than
+      8 lines that performs a distinct sub-task, extract it to a named
+      helper method.
+    engine: semantic
+    scope: "*.php"
+    severity: error
+
+  full-type-hints:
+    description: >
+      Every method must have full PHP 8.4+ type hints on all parameters
+      and a return type declaration. No missing types.
+    engine: semantic
+    scope: "*.php"
+    severity: error
+
+  dependency-direction:
+    description: >
+      DX layer code (files in Concerns/, Middleware/, Commands/, Facades/)
+      must depend on contracts (interfaces in Contracts/), never on
+      concrete implementations in Stores/, Evaluators/, Matchers/, or
+      other implementation namespaces.
+    engine: semantic
+    scope: "*.php"
+    severity: error
+
+  no-orchestration-labels:
+    description: >
+      No sprint, wave, task, phase, v1, v2, or similar orchestration
+      labels in class names, file names, method names, or comments.
+      Source code must not contain project management artifacts.
+    engine: semantic
+    scope: "*"
+    severity: error
