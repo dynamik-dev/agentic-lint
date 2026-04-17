@@ -86,6 +86,6 @@ def test_bench_cli_entrypoint_exists():
 
 def test_bench_module_imports():
     """bench module loads without requiring anthropic."""
-    from pipeline import bench
+    import bench
 
     assert hasattr(bench, "main")
