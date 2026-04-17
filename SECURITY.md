@@ -2,11 +2,11 @@
 
 ## Reporting a Vulnerability
 
-agentic-lint runs deterministic shell commands and dispatches a Claude subagent. If you find a way to escape the sandboxed scope or inject commands through a crafted `.agentic-lint.yml` or through file contents that bypass the script-rule scoping, please report it privately.
+bully runs deterministic shell commands and dispatches a Claude subagent. If you find a way to escape the sandboxed scope or inject commands through a crafted `.bully.yml` or through file contents that bypass the script-rule scoping, please report it privately.
 
-**Preferred:** [GitHub private vulnerability reporting](https://github.com/dynamik-dev/agentic-lint/security/advisories/new)
+**Preferred:** [GitHub private vulnerability reporting](https://github.com/dynamik-dev/bully/security/advisories/new)
 
-**Alternative:** Email chris@arter.dev with subject line `[agentic-lint] security`.
+**Alternative:** Email chris@arter.dev with subject line `[bully] security`.
 
 Expected response: acknowledgement within 72 hours.
 

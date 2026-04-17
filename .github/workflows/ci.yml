@@ -31,5 +31,5 @@ jobs:
       - name: pytest
         run: pytest -q
 
-      - name: agentic-lint dogfood
+      - name: bully dogfood
         run: bash scripts/dogfood.sh

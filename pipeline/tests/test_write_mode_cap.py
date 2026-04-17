@@ -85,7 +85,7 @@ def test_was_write_truncated_for_path(tmp_path):
 
 
 def test_pipeline_marks_write_content_truncated(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
     target = tmp_path / "big.py"
     total = 300
     target.write_text("\n".join(f"x = {i}" for i in range(1, total + 1)))
@@ -93,7 +93,7 @@ def test_pipeline_marks_write_content_truncated(tmp_path):
     # Provide a multi-line diff so the semantic rule dispatches (not filtered).
     diff = "@@ -1,2 +1,4 @@\n+added one\n+added two\n"
     result = run_pipeline(
-        str(tmp_path / ".agentic-lint.yml"),
+        str(tmp_path / ".bully.yml"),
         str(target),
         diff,
     )

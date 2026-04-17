@@ -1,22 +1,21 @@
-# agentic-lint
+<p align="center">
+  <img src="bully.png" alt="Bully claude code tool for linting enforcement" width="500">
+</p>
 
-An agent-native lint pipeline for Claude Code. One config file (`.agentic-lint.yml`), one enforcement point (`PostToolUse` hook), one violation format. Works for any language -- rules are scoped by file glob, not by language declaration.
+<p align="center">
+  <a href="https://github.com/dynamik-dev/bully/actions/workflows/ci.yml"><img src="https://github.com/dynamik-dev/bully/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT">
+  <img src="https://img.shields.io/badge/Claude_Code-plugin-5A67D8" alt="Claude Code plugin">
+</p>
 
-## What actually happens
+## CLAUDE.md asks. Bully doesn't.
 
-```
-$ # Claude edits app.ts and adds a console.log.
-$ # The PostToolUse hook runs .agentic-lint.yml against the edit.
-$ # no-console-log (script rule) fires -- exit code 2.
-$ # Claude's Edit tool call is blocked; the violation text is fed back.
-$ # Claude removes the console.log and re-edits. Hook passes. Done.
-```
-
-No extra prompt, no reminder in CLAUDE.md, no "please remember to". The rule fired, the tool call blocked, the agent adjusted.
+Bully is a lint pipeline for Claude Code. Every `Edit` / `Write` hits a `PostToolUse` hook that checks the change against `.bully.yml`. **Errors block the tool call -- Claude can't land the edit until it passes.** Warnings don't block. Any language; rules are scoped by file glob.
 
 ## The config
 
-A `.agentic-lint.yml` is a flat list of rules. Each rule says what to check, where it applies, how bad it is, and which engine runs it -- `script` (deterministic shell command) or `semantic` (natural-language rule the agent evaluates against the diff):
+A `.bully.yml` is a flat list of rules. Each rule says what to check, where it applies, how bad it is, and which engine runs it `script` (deterministic shell command) or `semantic` (natural-language rule the agent evaluates against the diff):
 
 ```yaml
 schema_version: 1
@@ -42,26 +41,28 @@ rules:
 
 The first rule runs a grep on every edited `.ts`/`.tsx`; the second ships the diff to the agent with the description as the evaluation prompt. No plugins, no DSL -- just globs, shell, and prose.
 
-Starter packs for common stacks live in [`examples/packs/`](examples/packs/) (react-ts, nextjs, django, fastapi, go, rails, rust-cli). Pull one in as a baseline:
+Need to share rules across your own repos? `extends:` accepts any relative or absolute path to another `.bully.yml`:
 
 ```yaml
 schema_version: 1
-extends: ["@agentic-lint/react-ts"]
+extends: ["../shared/bully-base.yml"]
 
 rules:
-  # your project-specific rules here
+  # project-specific overrides + additions here
 ```
 
-Local rules override pack rules of the same id.
+Local rules override inherited rules of the same id.
 
 ## How it works
 
-Every `Edit` / `Write` tool call triggers the hook, which runs two phases:
+<p align="center">
+  <img src="bully-flow.png" alt="Bully flow: Edit/Write → PostToolUse hook → script phase → semantic phase → block or pass" width="500">
+</p>
 
 1. **Script phase** -- deterministic checks (grep, awk, shell-out to a linter). Fast. Fails the tool call on error-severity violations via exit code 2.
 2. **Semantic phase** -- if the script phase passes, the pipeline hands a unified diff plus rule descriptions to the evaluator subagent. Structured verdicts come back; the parent session surfaces them.
 
-Violations block the tool call until fixed. Passes are silent. Same trigger, same output format, same fix loop -- across every language in the repo. Deterministic rules stay as shell. Judgment rules ("inline single-use variables", "don't derive state with `useEffect`") live as plain English the agent evaluates against the diff.
+Deterministic rules stay as shell. Judgment rules ("inline single-use variables", "don't derive state with `useEffect`") live as plain English the agent evaluates against the diff. Same trigger, same output format, same fix loop -- across every language in the repo.
 
 ## Prerequisites
 
@@ -72,29 +73,39 @@ The pipeline is stdlib-only Python and the hook is a five-line bash wrapper. You
 
 ## Install
 
-### 1. Clone somewhere stable
+Bully ships as a Claude Code plugin. Two slash commands:
 
-```bash
-git clone https://github.com/dynamik-dev/agentic-lint.git ~/.agentic-lint
+```
+/plugin marketplace add https://github.com/dynamik-dev/bully
+/plugin install bully
 ```
 
-The path has to be stable so Claude Code finds the hook every time. Anywhere works (`~/.agentic-lint`, `~/code/agentic-lint`, `/opt/agentic-lint`) -- use the same path in step 2.
+That wires up everything: skills (`bully`, `bully-init`, `bully-author`, `bully-review`), the `bully-evaluator` subagent, and the `PostToolUse` hook that runs the pipeline on every `Edit` / `Write`. No clone, no symlinks, no `settings.json` surgery. Restart Claude Code to pick it up.
 
-### 2. Symlink skills and the evaluator agent
+To change the evaluator model, set the plugin's agent override or edit `model:` in `agents/bully-evaluator.md` in your local plugin cache (default is `sonnet`).
+
+### Verify the install
 
 ```bash
+python3 "$(ls -d ~/.claude/plugins/cache/*/bully/*/ | tail -1)pipeline/pipeline.py" --doctor
+```
+
+`--doctor` checks Python version, config presence and parse-ability, hook wiring, evaluator-agent registration, and each skill. One line per check, `[OK]` or `[FAIL]`.
+
+### Manual install (fallback)
+
+If you can't use the plugin system:
+
+```bash
+git clone https://github.com/dynamik-dev/bully.git ~/.bully
 mkdir -p ~/.claude/skills ~/.claude/agents
 for s in bully bully-init bully-author bully-review; do
-  ln -sf ~/.agentic-lint/skills/$s ~/.claude/skills/$s
+  ln -sf ~/.bully/skills/$s ~/.claude/skills/$s
 done
-ln -sf ~/.agentic-lint/agents/bully-evaluator.md ~/.claude/agents/bully-evaluator.md
+ln -sf ~/.bully/agents/bully-evaluator.md ~/.claude/agents/bully-evaluator.md
 ```
 
-Project scope: symlink into `.claude/skills` / `.claude/agents` at your project root so the skills only activate there. To change the evaluator model, edit `model:` in `~/.agentic-lint/agents/bully-evaluator.md` (default is `sonnet`).
-
-### 3. Register the PostToolUse hook
-
-Add this block to `~/.claude/settings.json` (or `.claude/settings.json` in a project):
+Then add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -103,23 +114,16 @@ Add this block to `~/.claude/settings.json` (or `.claude/settings.json` in a pro
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "$HOME/.agentic-lint/pipeline/hook.sh" }
+          {
+            "type": "command",
+            "command": "$HOME/.bully/pipeline/hook.sh"
+          }
         ]
       }
     ]
   }
 }
 ```
-
-Restart Claude Code so it picks up the new skills, agent, and hook.
-
-### Verify the install
-
-```bash
-python3 ~/.agentic-lint/pipeline/pipeline.py --doctor
-```
-
-`--doctor` checks Python version, config presence and parse-ability, hook wiring in `settings.json`, evaluator-agent registration, and each skill symlink. One line per check, `[OK]` or `[FAIL]`. All `[OK]` means you're done. A one-line installer (`curl -sSL .../install.sh | bash`) is on the roadmap.
 
 ## Quick start (per project)
 
@@ -129,24 +133,24 @@ python3 ~/.agentic-lint/pipeline/pipeline.py --doctor
 > /bully-init
 ```
 
-The init skill detects your stack, scans for existing linter configs, asks a couple of questions, and writes a baseline `.agentic-lint.yml`. If a starter pack matches your stack, it wires up `extends:` for you. Review, tweak, commit.
+The init skill detects your stack, scans for existing linter configs, asks a couple of questions, and writes a baseline `.bully.yml`. If the examples catalog has rules for your stack, it offers them one-by-one -- you pick what to seed, and the selected rules get copied into your config. Review, tweak, commit.
 
 ### 2. Adopting in a repo with existing violations
 
-A fresh rule across an existing codebase lights up every pre-existing problem. Baseline the current state so only *new* violations block edits:
+A fresh rule across an existing codebase lights up every pre-existing problem. Baseline the current state so only _new_ violations block edits:
 
 ```bash
-python3 ~/.agentic-lint/pipeline/pipeline.py --baseline-init --glob "src/**/*.ts"
+python3 ~/.bully/pipeline/pipeline.py --baseline-init --glob "src/**/*.ts"
 ```
 
-That writes `.agentic-lint/baseline.json`. Future runs ignore anything recorded there. See [docs/design.md](docs/design.md) for the contract.
+That writes `.bully/baseline.json`. Future runs ignore anything recorded there. See [docs/design.md](docs/design.md) for the contract.
 
 ### 3. Silencing a specific line
 
 When a rule is right in general but wrong on one line:
 
 ```ts
-eval(expr); // agentic-lint-disable: no-eval reason: sandboxed input
+eval(expr); // bully-disable: no-eval reason: sandboxed input
 ```
 
 Use sparingly. Telemetry tracks disables so noisy rules surface in `/bully-review`.
@@ -154,10 +158,10 @@ Use sparingly. Telemetry tracks disables so noisy rules surface in `/bully-revie
 ### 4. Telemetry (optional)
 
 ```bash
-mkdir .agentic-lint
+mkdir .bully
 ```
 
-One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in `.gitignore` -- per-developer data. After a few hundred edits, run `/bully-review` for noisy / dead / slow rule analysis.
+One JSONL record per pipeline run lands in `.bully/log.jsonl`. Already in `.gitignore` -- per-developer data. After a few hundred edits, run `/bully-review` for noisy / dead / slow rule analysis.
 
 ### 5. Evolve the config
 
@@ -167,14 +171,14 @@ One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in
 > apply the recommendations from the last review
 ```
 
-The `bully-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.agentic-lint.yml`.
+The `bully-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.bully.yml`.
 
 ## Manual invocation
 
 For authoring and debugging rules without triggering an Edit:
 
 ```bash
-PIPE=~/.agentic-lint/pipeline/pipeline.py
+PIPE=~/.bully/pipeline/pipeline.py
 
 python3 "$PIPE" --validate                                   # parse + enum checks
 python3 "$PIPE" --file src/foo.php                           # full pipeline on a file
@@ -185,17 +189,26 @@ python3 "$PIPE" --show-resolved-config                       # rules after exten
 
 ## Uninstall
 
+Plugin install:
+
+```
+/plugin uninstall bully
+/plugin marketplace remove bully-marketplace
+```
+
+Manual install:
+
 ```bash
 rm ~/.claude/skills/bully{,-init,-author,-review}
 rm ~/.claude/agents/bully-evaluator.md
 # Then remove the PostToolUse block from ~/.claude/settings.json
-rm -rf ~/.agentic-lint
+rm -rf ~/.bully
 ```
 
 ## Development
 
 ```bash
-cd ~/.agentic-lint
+cd ~/.bully
 pip install -e ".[dev]"   # ruff, shellcheck-py, pytest, pre-commit
 bash scripts/lint.sh      # ruff + shellcheck + pytest + dogfood
 ```

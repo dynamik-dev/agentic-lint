@@ -1,15 +1,9 @@
-# Rails rule pack for agentic-lint.
+# Example rules for Rails projects.
 #
-# Framework: Ruby on Rails (7.x+, but most rules apply back to 5.x).
-# Usage: drop into your app's `.agentic-lint.yml` or merge selectively.
-# These rules encode common Rails production lessons -- raw SQL traps,
-# controller discipline, and callback sprawl. They are starting points;
-# tune scopes (e.g. `app/models/*.rb` vs. `*.rb`) to your project layout.
-#
-# Most of the interesting Rails pitfalls live at the semantic level
-# because they depend on intent (is this a controller action? a scope?
-# an after_save?). Pair these with RuboCop for style and Brakeman for
-# security -- they are complementary, not redundant.
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-raw-sql-without-sanitize:

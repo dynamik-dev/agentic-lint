@@ -1,6 +1,6 @@
 # Design
 
-`agentic-lint` is a Claude Code skill system that enforces project coding standards through a two-phase evaluation pipeline: deterministic script checks for pattern-matchable rules, followed by LLM semantic evaluation for judgment-based rules. It fires on every `Edit` and `Write` tool call via the `PostToolUse` hook.
+`bully` is a Claude Code skill system that enforces project coding standards through a two-phase evaluation pipeline: deterministic script checks for pattern-matchable rules, followed by LLM semantic evaluation for judgment-based rules. It fires on every `Edit` and `Write` tool call via the `PostToolUse` hook.
 
 ## Core principles
 
@@ -13,7 +13,7 @@
 
 ## Rule format
 
-Rules live in `.agentic-lint.yml` at the project root.
+Rules live in `.bully.yml` at the project root.
 
 ### Fields
 
@@ -69,7 +69,7 @@ rules:
 
 ### Optional fields
 
-- `fix_hint` — script rules only. A one-line suggestion (e.g. `"replace compact() with an explicit array"`) that the pipeline attaches to each emitted `Violation` as `suggestion`. The `agentic-lint` skill surfaces it verbatim. Keep it short and mechanical; anything that needs judgment belongs in the `description` of a semantic rule.
+- `fix_hint` — script rules only. A one-line suggestion (e.g. `"replace compact() with an explicit array"`) that the pipeline attaches to each emitted `Violation` as `suggestion`. The `bully` skill surfaces it verbatim. Keep it short and mechanical; anything that needs judgment belongs in the `description` of a semantic rule.
 
 ### Design decisions
 
@@ -79,7 +79,7 @@ rules:
 
 ## Validation
 
-`.agentic-lint.yml` is parsed by a hardened reader in `pipeline/pipeline.py:parse_config`. It stays stdlib-only — no PyYAML — but every failure is loud.
+`.bully.yml` is parsed by a hardened reader in `pipeline/pipeline.py:parse_config`. It stays stdlib-only — no PyYAML — but every failure is loud.
 
 Checks performed on load:
 
@@ -101,23 +101,24 @@ The stdlib-only invariant holds: the parser is stricter, not heavier.
 
 ## Extends
 
-A config can inherit rules from other packs:
+A config can inherit rules from other local or shared `.bully.yml` files:
 
 ```yaml
 extends:
-  - "@agentic-lint/react-ts"
+  - "../shared/bully-base.yml"
   - "./packs/custom.yml"
 rules:
   no-console-log:
     severity: warning   # locally override the inherited error
 ```
 
-Resolution rules (`pipeline/pipeline.py:resolve_extends`):
+Resolution rules (`pipeline/pipeline.py:_resolve_extends_target`):
 
-- `@agentic-lint/<name>` resolves to `examples/packs/<name>.yml` inside the agentic-lint install.
 - `./path` or `../path` resolves relative to the config file containing the `extends:` entry.
 - Absolute paths are accepted and used as-is.
 - Each referenced file is parsed with the same validator.
+
+Bully does not ship blessed packs. `examples/rules/` is a browseable catalog of common rules organized by tech -- copy what you want, do not `extends:` from it.
 
 Merge order: **local wins**. Rules are merged left-to-right through `extends:`, then the local `rules:` block overrides any inherited rule with the same id. Merging is per-rule, not per-field — redefining `no-console-log` locally replaces the whole rule, it does not patch its `severity` onto the inherited body.
 
@@ -125,11 +126,11 @@ Cycles are detected: if `a.yml` extends `b.yml` which extends `a.yml`, the parse
 
 ## Baseline and disables
 
-Adopting agentic-lint on a codebase with pre-existing violations is handled two ways.
+Adopting bully on a codebase with pre-existing violations is handled two ways.
 
 ### Baseline file
 
-`.agentic-lint/baseline.json` records known-at-adoption violations that should not block edits:
+`.bully/baseline.json` records known-at-adoption violations that should not block edits:
 
 ```json
 {
@@ -142,17 +143,17 @@ Adopting agentic-lint on a codebase with pre-existing violations is handled two 
 
 `checksum` is a short hash of the offending line's content. On every run, `pipeline.py` filters matching violations before deciding `blocked` vs `evaluate`. An entry drops off the baseline the moment the file stops producing that violation with that checksum — when the code is fixed, the suppression goes with it.
 
-Generate and refresh with `agentic-lint baseline init` (run once at adoption) or by hand. The file lives under `.agentic-lint/` so it shares the telemetry opt-in shape: no directory, no baseline.
+Generate and refresh with `bully baseline init` (run once at adoption) or by hand. The file lives under `.bully/` so it shares the telemetry opt-in shape: no directory, no baseline.
 
 ### Per-line disables
 
 For one-off suppressions, a directive comment on the offending line opts that line out of a specific rule:
 
 ```python
-password = config.get("secret")  # agentic-lint-disable: no-hardcoded-secret not a secret, just the key name
+password = config.get("secret")  # bully-disable: no-hardcoded-secret not a secret, just the key name
 ```
 
-The syntax is `# agentic-lint-disable: <rule-id> <reason>`. Parser is comment-prefix-agnostic — `//`, `#`, `--`, `;` all work. Multiple rule ids can be comma-separated. The reason is required (short human text) so suppressions carry their own justification; `pipeline.py:parse_disable_directive` rejects disables without one.
+The syntax is `# bully-disable: <rule-id> <reason>`. Parser is comment-prefix-agnostic — `//`, `#`, `--`, `;` all work. Multiple rule ids can be comma-separated. The reason is required (short human text) so suppressions carry their own justification; `pipeline.py:parse_disable_directive` rejects disables without one.
 
 Directives are scoped to the line they appear on. There is no file-level or block-level form — deliberate; line-scoped disables do not silently widen.
 
@@ -174,7 +175,7 @@ Matches return `pass` before config parse, scope match, or script dispatch. No c
 PostToolUse fires (Edit or Write)
        |
        v
-  hook.sh walks up to find .agentic-lint.yml
+  hook.sh walks up to find .bully.yml
        |
        v
   pipeline.py receives JSON payload
@@ -205,11 +206,11 @@ PostToolUse fires (Edit or Write)
        |
        v
   hook.sh injects payload via additionalContext
-  agent's Edit/Write continues; agentic-lint skill
+  agent's Edit/Write continues; bully skill
   evaluates the payload on the next turn
        |
        v
-  Append telemetry record to .agentic-lint/log.jsonl
+  Append telemetry record to .bully/log.jsonl
   (if directory exists)
 ```
 
@@ -219,7 +220,7 @@ The pipeline synthesizes the pre-edit file state so it can emit a unified diff w
 
 - **Edit**: reads the current file, replaces `new_string` with `old_string` (first occurrence) to reconstruct the before state, then `difflib.unified_diff(...)` with five lines of context. Line numbers in the diff are real, so the agent can cite them in violations.
 - **Write**: emits the full file content with each line prefixed `NNNN:`. Line numbers remain usable for citing violations.
-- **Fallback**: if `new_string` cannot be found in the file (e.g. a subsequent edit already replaced it), the pipeline emits a best-effort synthetic diff of the strings alone. The diff is prefixed with a `WARNING: could not anchor to file on disk, line numbers are synthetic` line and the surrounding payload carries `"line_anchors": "synthetic"`. The `agentic-lint` skill reads that flag and refuses to cite line numbers it cannot trust; the fallback also emits a `diff_anchor_fallback` record to telemetry so the case is visible in the analyzer.
+- **Fallback**: if `new_string` cannot be found in the file (e.g. a subsequent edit already replaced it), the pipeline emits a best-effort synthetic diff of the strings alone. The diff is prefixed with a `WARNING: could not anchor to file on disk, line numbers are synthetic` line and the surrounding payload carries `"line_anchors": "synthetic"`. The `bully` skill reads that flag and refuses to cite line numbers it cannot trust; the fallback also emits a `diff_anchor_fallback` record to telemetry so the case is visible in the analyzer.
 
 ### Script output adapters
 
@@ -293,7 +294,7 @@ The `passed_checks` list is load-bearing. It tells the LLM which concerns have a
 
 ## Telemetry and self-improvement
 
-Telemetry is opt-in: the pipeline writes to `.agentic-lint/log.jsonl` only when that directory exists next to the config.
+Telemetry is opt-in: the pipeline writes to `.bully/log.jsonl` only when that directory exists next to the config.
 
 Each record:
 
@@ -337,9 +338,9 @@ Agent-native by default: grep/awk primitives and semantic rules. External linter
 
 ## CLAUDE.md integration
 
-`.agentic-lint.yml` is the primary config. CLAUDE.md is a secondary rule source during init.
+`.bully.yml` is the primary config. CLAUDE.md is a secondary rule source during init.
 
-- **Init-time migration, not runtime parsing.** The `bully-init` skill reads CLAUDE.md once during bootstrap, extracts structured style rules, and migrates them into `.agentic-lint.yml`. At runtime, the pipeline reads only the YAML.
+- **Init-time migration, not runtime parsing.** The `bully-init` skill reads CLAUDE.md once during bootstrap, extracts structured style rules, and migrates them into `.bully.yml`. At runtime, the pipeline reads only the YAML.
 - **Deduplication at init time.** The init skill compares migrated CLAUDE.md rules against rules it generated from other sources and deduplicates before writing the YAML.
 - **CLAUDE.md stays readable.** The init skill does not strip rules from CLAUDE.md. Those rules still serve as human-readable documentation; they stop being the enforcement mechanism.
 - **No magic parsing.** The init skill looks for structured sections (bulleted lists under headings like "Style Rules", "Conventions", "Coding Standards") and treats each bullet as a candidate rule. Unstructured prose is ignored.
@@ -362,7 +363,7 @@ For a different stack (Next.js, Rust CLI, Django), the same pipeline with differ
 
 Four skills cover the lifecycle:
 
-- **`bully-init`** — bootstraps `.agentic-lint.yml` once per project (zero → something).
-- **`agentic-lint`** — interprets hook output (blocked text or semantic evaluation payload) during every Edit/Write cycle. Not user-invocable.
+- **`bully-init`** — bootstraps `.bully.yml` once per project (zero → something).
+- **`bully`** — interprets hook output (blocked text or semantic evaluation payload) during every Edit/Write cycle. Not user-invocable.
 - **`bully-author`** — adds, modifies, or removes rules. Tests every rule against a fixture before writing to the config. User-invocable.
 - **`bully-review`** — audits rule health from the telemetry log and hands concrete recommendations off to the author skill. User-invocable.

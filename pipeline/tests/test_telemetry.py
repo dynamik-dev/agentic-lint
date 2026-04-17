@@ -1,4 +1,4 @@
-"""Tests for telemetry logging (opt-in via .agentic-lint/ directory)."""
+"""Tests for telemetry logging (opt-in via .bully/ directory)."""
 
 import json
 import sys
@@ -12,11 +12,11 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_no_log_written_when_directory_missing(tmp_path):
-    # Copy config into a tmp project with NO .agentic-lint/ dir
-    config = tmp_path / ".agentic-lint.yml"
+    # Copy config into a tmp project with NO .bully/ dir
+    config = tmp_path / ".bully.yml"
     config.write_text((FIXTURES / "basic-config.yml").read_text())
     run_pipeline(str(config), str(FIXTURES / "clean.php"), "")
-    assert not (tmp_path / ".agentic-lint").exists()
+    assert not (tmp_path / ".bully").exists()
 
 
 def _multiline_diff() -> str:
@@ -31,13 +31,13 @@ def _multiline_diff() -> str:
 
 
 def test_log_written_when_directory_exists(tmp_path):
-    config = tmp_path / ".agentic-lint.yml"
+    config = tmp_path / ".bully.yml"
     config.write_text((FIXTURES / "basic-config.yml").read_text())
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully").mkdir()
 
     run_pipeline(str(config), str(FIXTURES / "clean.php"), _multiline_diff())
 
-    log = tmp_path / ".agentic-lint" / "log.jsonl"
+    log = tmp_path / ".bully" / "log.jsonl"
     assert log.exists()
     # Filter to the main pipeline record (ignore new semantic_skipped type).
     records = [json.loads(line) for line in log.read_text().strip().splitlines()]
@@ -51,13 +51,13 @@ def test_log_written_when_directory_exists(tmp_path):
 
 
 def test_log_records_script_verdicts(tmp_path):
-    config = tmp_path / ".agentic-lint.yml"
+    config = tmp_path / ".bully.yml"
     config.write_text((FIXTURES / "basic-config.yml").read_text())
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully").mkdir()
 
     run_pipeline(str(config), str(FIXTURES / "violation.php"), "")
 
-    log = tmp_path / ".agentic-lint" / "log.jsonl"
+    log = tmp_path / ".bully" / "log.jsonl"
     record = json.loads(log.read_text().strip().splitlines()[-1])
     rule_records = {r["id"]: r for r in record["rules"]}
     assert "no-compact" in rule_records
@@ -67,13 +67,13 @@ def test_log_records_script_verdicts(tmp_path):
 
 
 def test_log_records_semantic_requested(tmp_path):
-    config = tmp_path / ".agentic-lint.yml"
+    config = tmp_path / ".bully.yml"
     config.write_text((FIXTURES / "basic-config.yml").read_text())
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully").mkdir()
 
     run_pipeline(str(config), str(FIXTURES / "clean.php"), _multiline_diff())
 
-    log = tmp_path / ".agentic-lint" / "log.jsonl"
+    log = tmp_path / ".bully" / "log.jsonl"
     records = [json.loads(line) for line in log.read_text().strip().splitlines()]
     main = [r for r in records if "rules" in r][-1]
     rule_records = {r["id"]: r for r in main["rules"]}
@@ -83,15 +83,15 @@ def test_log_records_semantic_requested(tmp_path):
 
 
 def test_log_appends_on_repeat_runs(tmp_path):
-    config = tmp_path / ".agentic-lint.yml"
+    config = tmp_path / ".bully.yml"
     config.write_text((FIXTURES / "basic-config.yml").read_text())
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully").mkdir()
 
     run_pipeline(str(config), str(FIXTURES / "clean.php"), "")
     run_pipeline(str(config), str(FIXTURES / "clean.php"), "")
     run_pipeline(str(config), str(FIXTURES / "violation.php"), "")
 
-    log = tmp_path / ".agentic-lint" / "log.jsonl"
+    log = tmp_path / ".bully" / "log.jsonl"
     # Main pipeline records (one per run); auxiliary semantic_skipped records
     # are filtered out since the plan (4.2) explicitly adds them.
     records = [json.loads(line) for line in log.read_text().strip().splitlines()]

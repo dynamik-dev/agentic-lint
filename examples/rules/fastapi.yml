@@ -1,17 +1,9 @@
-# FastAPI starter rule pack
+# Example rules for FastAPI projects.
 #
-# Stack: FastAPI services in Python 3.10+. Assumes Pydantic v2.
-#
-# How to use:
-#   - Copy these rules into your project's `.agentic-lint.yml` under
-#     the `rules:` key, or
-#   - Once the extends mechanism ships (see docs/plan.md section 3.2):
-#
-#       extends: ["@agentic-lint/fastapi"]
-#
-# These are starting points. Narrow `scope` to your application
-# package (e.g. `app/**/*.py`) so the rules don't fire on tests or
-# conftest files, and adjust severities to match your team.
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-global-db-session:

@@ -1,6 +1,6 @@
 ---
 name: bully
-description: Interprets agentic-lint PostToolUse hook output after Edit/Write -- fixes blocked-stderr violations or dispatches the bully-evaluator subagent for semantic payloads.
+description: Interprets bully PostToolUse hook output after Edit/Write -- fixes blocked-stderr violations or dispatches the bully-evaluator subagent for semantic payloads.
 metadata:
   author: dynamik-dev
   version: 2.0.0
@@ -10,7 +10,7 @@ metadata:
 
 # Agentic Lint
 
-Interpret and act on agentic-lint PostToolUse hook output. Not user-invocable.
+Interpret and act on bully PostToolUse hook output. Not user-invocable.
 
 ## When blocked (hook exited 2)
 
@@ -81,7 +81,7 @@ For each entry in `VIOLATIONS:`, look up severity in the original `evaluate` arr
 After parsing VIOLATIONS / NO_VIOLATIONS (whether from the subagent or from inline eval), record each rule's verdict. For every rule id in the original `evaluate` array, invoke the Bash tool once with:
 
 ```
-python3 $HOME/.agentic-lint/pipeline/pipeline.py --log-verdict --rule <rule-id> --verdict <pass|violation> --file <file-path>
+python3 $HOME/.bully/pipeline/pipeline.py --log-verdict --rule <rule-id> --verdict <pass|violation> --file <file-path>
 ```
 
 Use `violation` if the rule appears in VIOLATIONS, `pass` if it appears in NO_VIOLATIONS. This is a no-op when telemetry is disabled, so always invoke. Adjust the path if the pipeline is installed elsewhere.

@@ -1,18 +1,9 @@
-# React + TypeScript starter rule pack
+# Example rules for React + TypeScript projects (.ts / .tsx).
 #
-# Stack: React (any version) projects written in TypeScript (.ts / .tsx).
-#
-# How to use:
-#   - Copy these rules into your project's `.agentic-lint.yml` under
-#     the `rules:` key, or
-#   - Once the extends mechanism ships (see docs/plan.md section 3.2),
-#     reference this pack directly:
-#
-#       extends: ["@agentic-lint/react-ts"]
-#
-# These rules are starting points. Tune `severity` (error vs warning)
-# and `scope` globs to match how strict your team wants to be and where
-# your source lives (e.g. narrow to `src/**/*.tsx`).
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-console-log:

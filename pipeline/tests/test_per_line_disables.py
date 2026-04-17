@@ -1,4 +1,4 @@
-"""Tests for `# agentic-lint-disable: rule-id` per-line suppressions."""
+"""Tests for `# bully-disable: rule-id` per-line suppressions."""
 
 import sys
 from pathlib import Path
@@ -30,7 +30,7 @@ RULE_YAML = (
 
 
 def test_parse_single_rule_directive():
-    ids, reason = _parse_disable_directive("# agentic-lint-disable: no-foo because reason")
+    ids, reason = _parse_disable_directive("# bully-disable: no-foo because reason")
     assert ids == {"no-foo"}
     assert reason == "because reason"
 
@@ -38,14 +38,14 @@ def test_parse_single_rule_directive():
 def test_parse_directive_captures_first_id_and_rest_as_reason():
     # Current parser: the first whitespace-delimited token after the colon is
     # the id; the rest is the reason. Commas in the reason are preserved.
-    ids, reason = _parse_disable_directive("# agentic-lint-disable: no-foo, no-bar explanation")
+    ids, reason = _parse_disable_directive("# bully-disable: no-foo, no-bar explanation")
     assert ids == {"no-foo"}
     assert reason is not None and "no-bar" in reason
 
 
 def test_parse_disable_all_when_no_ids():
     # empty id list means disable everything
-    ids, _ = _parse_disable_directive("# agentic-lint-disable")
+    ids, _ = _parse_disable_directive("# bully-disable")
     assert ids == set()
 
 
@@ -61,12 +61,12 @@ def test_parse_non_directive_returns_none():
 
 
 def test_same_line_hash_comment_suppresses(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
     target = tmp_path / "a.py"
-    target.write_text("x = 'FORBIDDEN'  # agentic-lint-disable: no-foo legacy\n")
+    target.write_text("x = 'FORBIDDEN'  # bully-disable: no-foo legacy\n")
 
     result = run_pipeline(
-        str(tmp_path / ".agentic-lint.yml"),
+        str(tmp_path / ".bully.yml"),
         str(target),
         "",
     )
@@ -89,11 +89,11 @@ def test_previous_line_comment_suppresses(tmp_path):
         "    severity: error\n"
         "    script: \"grep -n 'FORBIDDEN' {file} && exit 1 || exit 0\"\n"
     )
-    (tmp_path / ".agentic-lint.yml").write_text(single_rule_yaml)
+    (tmp_path / ".bully.yml").write_text(single_rule_yaml)
     target = tmp_path / "b.py"
-    target.write_text("# agentic-lint-disable: no-foo known legacy\nx = 'FORBIDDEN'\n")
+    target.write_text("# bully-disable: no-foo known legacy\nx = 'FORBIDDEN'\n")
     result = run_pipeline(
-        str(tmp_path / ".agentic-lint.yml"),
+        str(tmp_path / ".bully.yml"),
         str(target),
         "",
     )
@@ -103,7 +103,7 @@ def test_previous_line_comment_suppresses(tmp_path):
 
 def test_slash_slash_comment_suppresses():
     assert _line_has_disable_file(
-        "x = y;  // agentic-lint-disable: no-foo\n",
+        "x = y;  // bully-disable: no-foo\n",
         line=1,
         rule_id="no-foo",
     )
@@ -112,7 +112,7 @@ def test_slash_slash_comment_suppresses():
 def test_dash_dash_comment_suppresses():
     # SQL/Lua/Haskell-style
     assert _line_has_disable_file(
-        "SELECT 1; -- agentic-lint-disable: no-foo\n",
+        "SELECT 1; -- bully-disable: no-foo\n",
         line=1,
         rule_id="no-foo",
     )
@@ -120,7 +120,7 @@ def test_dash_dash_comment_suppresses():
 
 def test_block_comment_suppresses():
     assert _line_has_disable_file(
-        "/* agentic-lint-disable: no-foo */ x = 1;\n",
+        "/* bully-disable: no-foo */ x = 1;\n",
         line=1,
         rule_id="no-foo",
     )
@@ -128,7 +128,7 @@ def test_block_comment_suppresses():
 
 def test_non_matching_rule_id_not_suppressed():
     assert not _line_has_disable_file(
-        "x = 1  # agentic-lint-disable: some-other-rule\n",
+        "x = 1  # bully-disable: some-other-rule\n",
         line=1,
         rule_id="no-foo",
     )
@@ -136,7 +136,7 @@ def test_non_matching_rule_id_not_suppressed():
 
 def test_disable_without_ids_suppresses_all():
     assert _line_has_disable_file(
-        "x = 1  # agentic-lint-disable\n",
+        "x = 1  # bully-disable\n",
         line=1,
         rule_id="any-rule-at-all",
     )

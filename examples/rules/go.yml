@@ -1,14 +1,9 @@
-# Go rule pack for agentic-lint.
+# Example rules for Go projects.
 #
-# Framework: Go (standard library, idiomatic project layouts).
-# Usage: copy rules into your project's `.agentic-lint.yml` or reference
-# them as a starting point. These are opinionated defaults -- adjust the
-# scope globs and severities to fit your codebase.
-#
-# Script rules here are intentionally heuristic (grep-based). They trade
-# some false positives for zero tooling setup. If you already run
-# `go vet`, `errcheck`, or `staticcheck` in CI, prefer those for
-# deep analysis and keep these rules for the fast PostToolUse loop.
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-naked-returns:

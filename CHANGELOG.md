@@ -9,8 +9,8 @@ See docs/plan.md for the active improvement plan.
 ### Added
 - Two-phase lint pipeline (script + semantic rules).
 - PostToolUse hook integration for Claude Code.
-- Four skills: agentic-lint, agentic-lint-init, agentic-lint-author, agentic-lint-review.
+- Four skills: bully, bully-init, bully-author, bully-review.
 - Semantic evaluator subagent with strict VIOLATIONS/NO_VIOLATIONS output contract.
-- Opt-in JSONL telemetry (`.agentic-lint/log.jsonl`).
+- Opt-in JSONL telemetry (`.bully/log.jsonl`).
 - Laravel example rule pack.
-- Dogfood config (`.agentic-lint.yml`) enforcing stdlib-only runtime, strict bash mode, and more.
+- Dogfood config (`.bully.yml`) enforcing stdlib-only runtime, strict bash mode, and more.

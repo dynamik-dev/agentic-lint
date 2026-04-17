@@ -21,7 +21,7 @@ if ! shellcheck pipeline/hook.sh scripts/*.sh; then fail=1; fi
 echo "=> pytest"
 if ! pytest -q; then fail=1; fi
 
-echo "=> agentic-lint dogfood"
+echo "=> bully dogfood"
 if ! bash scripts/dogfood.sh; then fail=1; fi
 
 if [[ $fail -ne 0 ]]; then

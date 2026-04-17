@@ -27,7 +27,7 @@ def _run_doctor(cwd: Path, env_extra: dict[str, str] | None = None) -> subproces
 def test_doctor_all_pass(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
-    (project / ".agentic-lint.yml").write_text(
+    (project / ".bully.yml").write_text(
         "rules:\n"
         "  r1:\n"
         '    description: "desc"\n'
@@ -76,7 +76,7 @@ def test_doctor_all_pass(tmp_path):
 
 
 def test_doctor_missing_config_fails(tmp_path):
-    # No .agentic-lint.yml in project
+    # No .bully.yml in project
     project = tmp_path / "project"
     project.mkdir()
     home = tmp_path / "home"
@@ -89,13 +89,13 @@ def test_doctor_missing_config_fails(tmp_path):
         },
     )
     assert r.returncode == 1
-    assert "[FAIL] no .agentic-lint.yml" in r.stdout
+    assert "[FAIL] no .bully.yml" in r.stdout
 
 
 def test_doctor_missing_hook_fails(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
-    (project / ".agentic-lint.yml").write_text(
+    (project / ".bully.yml").write_text(
         "rules:\n"
         "  r1:\n"
         '    description: "d"\n'
@@ -120,7 +120,7 @@ def test_doctor_missing_hook_fails(tmp_path):
 def test_doctor_missing_evaluator_agent_fails(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
-    (project / ".agentic-lint.yml").write_text(
+    (project / ".bully.yml").write_text(
         "rules:\n"
         "  r1:\n"
         '    description: "d"\n'
@@ -150,7 +150,7 @@ def test_doctor_missing_evaluator_agent_fails(tmp_path):
 def test_doctor_malformed_config_fails(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
-    (project / ".agentic-lint.yml").write_text(
+    (project / ".bully.yml").write_text(
         "rules:\n"
         "\tbad-tabs:\n"  # tab indent -> parse error
         '    description: "x"\n'

@@ -1,9 +1,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.hypothesis/
 
 # Per-developer telemetry (see docs/telemetry.md)
-.agentic-lint/
+.bully/
 
 # Python build artifacts
 build/

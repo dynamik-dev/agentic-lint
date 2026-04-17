@@ -64,12 +64,12 @@ def test_all_skip_patterns_are_strings():
 
 
 def test_pipeline_short_circuits_on_lockfile(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
     target = tmp_path / "package-lock.json"
     target.write_text('{"dependencies": {}}')
 
     result = run_pipeline(
-        str(tmp_path / ".agentic-lint.yml"),
+        str(tmp_path / ".bully.yml"),
         str(target),
         "",
     )
@@ -79,14 +79,14 @@ def test_pipeline_short_circuits_on_lockfile(tmp_path):
 
 
 def test_pipeline_short_circuits_on_dist_path(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
     dist = tmp_path / "dist"
     dist.mkdir()
     target = dist / "bundle.js"
     target.write_text("var x = 1;\n")
 
     result = run_pipeline(
-        str(tmp_path / ".agentic-lint.yml"),
+        str(tmp_path / ".bully.yml"),
         str(target),
         "",
     )
@@ -94,13 +94,13 @@ def test_pipeline_short_circuits_on_dist_path(tmp_path):
 
 
 def test_pipeline_does_not_skip_normal_source(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
     target = tmp_path / "src" / "app.py"
     target.parent.mkdir()
     target.write_text("print('hi')\n")
 
     result = run_pipeline(
-        str(tmp_path / ".agentic-lint.yml"),
+        str(tmp_path / ".bully.yml"),
         str(target),
         "",
     )

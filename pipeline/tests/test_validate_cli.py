@@ -26,7 +26,7 @@ def test_validate_clean_config_returns_zero():
 
 
 def test_validate_malformed_config_returns_one(tmp_path):
-    bad = tmp_path / ".agentic-lint.yml"
+    bad = tmp_path / ".bully.yml"
     bad.write_text(
         "rules:\n"
         "\tbad-tabs:\n"
@@ -43,7 +43,7 @@ def test_validate_malformed_config_returns_one(tmp_path):
 
 
 def test_validate_unknown_field_fails(tmp_path):
-    bad = tmp_path / ".agentic-lint.yml"
+    bad = tmp_path / ".bully.yml"
     bad.write_text(
         "rules:\n"
         "  r1:\n"
@@ -66,14 +66,14 @@ def test_validate_missing_file_fails(tmp_path):
 
 
 def test_validate_default_config_path_when_absent(tmp_path):
-    # No config, no --config flag: defaults to ./.agentic-lint.yml
+    # No config, no --config flag: defaults to ./.bully.yml
     r = _run(["--validate"], cwd=tmp_path)
     assert r.returncode == 1
-    assert ".agentic-lint.yml" in r.stderr
+    assert ".bully.yml" in r.stderr
 
 
 def test_validate_invalid_severity_fails(tmp_path):
-    bad = tmp_path / ".agentic-lint.yml"
+    bad = tmp_path / ".bully.yml"
     bad.write_text(
         "rules:\n"
         "  r1:\n"

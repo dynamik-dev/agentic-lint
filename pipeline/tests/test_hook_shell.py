@@ -14,8 +14,8 @@ HOOK = Path(__file__).resolve().parent.parent / "hook.sh"
 
 
 def _write_project(tmp_path: Path, file_contents: dict[str, str], rule_yaml: str) -> Path:
-    """Create a tmp project with .agentic-lint.yml + source files."""
-    (tmp_path / ".agentic-lint.yml").write_text(rule_yaml)
+    """Create a tmp project with .bully.yml + source files."""
+    (tmp_path / ".bully.yml").write_text(rule_yaml)
     for rel, body in file_contents.items():
         p = tmp_path / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -168,12 +168,12 @@ def test_empty_stdin_exits_cleanly(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 5. File outside a repo with .agentic-lint.yml -> exit 0 silently
+# 5. File outside a repo with .bully.yml -> exit 0 silently
 # ---------------------------------------------------------------------------
 
 
 def test_no_config_found_exits_zero(tmp_path):
-    # No .agentic-lint.yml in tmp_path
+    # No .bully.yml in tmp_path
     target = tmp_path / "src" / "clean.py"
     target.parent.mkdir(parents=True)
     target.write_text("print('hi')\n")

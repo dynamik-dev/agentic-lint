@@ -152,7 +152,7 @@ class _ParsedConfig:
 
 
 def _parse_single_file(path: str) -> _ParsedConfig:
-    """Parse one .agentic-lint.yml into _ParsedConfig. Raises ConfigError on malformed input."""
+    """Parse one .bully.yml into _ParsedConfig. Raises ConfigError on malformed input."""
     rules: list[Rule] = []
     extends: list[str] = []
     schema_version: int | None = None
@@ -376,15 +376,6 @@ def _normalize_scope(value: object) -> tuple[str, ...]:
 def _resolve_extends_target(spec: str, config_path: str) -> Path:
     """Resolve an extends reference to an absolute Path."""
     config_dir = Path(config_path).resolve().parent
-    if spec.startswith("@agentic-lint/"):
-        name = spec.split("/", 1)[1]
-        home = Path(
-            os.environ.get(
-                "AGENTIC_LINT_HOME",
-                str(Path(__file__).resolve().parent.parent),
-            )
-        )
-        return (home / "examples" / "packs" / f"{name}.yml").resolve()
     p = Path(spec)
     if p.is_absolute():
         return p.resolve()
@@ -392,7 +383,7 @@ def _resolve_extends_target(spec: str, config_path: str) -> Path:
 
 
 def parse_config(path: str) -> list[Rule]:
-    """Parse .agentic-lint.yml into Rule objects, resolving `extends:` transitively.
+    """Parse .bully.yml into Rule objects, resolving `extends:` transitively.
 
     Local rules override same-id rules pulled in via extends (warn on stderr).
     Raises ConfigError on cycles, unknown keys/fields, invalid enums, etc.
@@ -427,7 +418,7 @@ def _load_with_extends(path: str, visited: list[str]) -> list[Rule]:
     # Local rules override.
     for r in parsed.rules:
         if r.id in merged:
-            sys.stderr.write(f"agentic-lint: rule {r.id} overridden by local config\n")
+            sys.stderr.write(f"bully: rule {r.id} overridden by local config\n")
         else:
             order.append(r.id)
         merged[r.id] = r
@@ -826,12 +817,12 @@ def build_semantic_payload(
 # ---------------------------------------------------------------------------
 
 _DISABLE_RE = re.compile(
-    r"agentic-lint-disable\s*:?\s*(?P<ids>[^#\n\r]*?)(?:\s+(?P<reason>[^#\n\r]+))?$"
+    r"bully-disable\s*:?\s*(?P<ids>[^#\n\r]*?)(?:\s+(?P<reason>[^#\n\r]+))?$"
 )
 
 
 def _baseline_path(config_path: str) -> Path:
-    return Path(config_path).resolve().parent / ".agentic-lint" / "baseline.json"
+    return Path(config_path).resolve().parent / ".bully" / "baseline.json"
 
 
 def _load_baseline(config_path: str) -> dict:
@@ -883,7 +874,7 @@ def _is_baselined(
 
 
 def _parse_disable_directive(text: str) -> tuple[set[str] | None, str | None]:
-    """Extract rule ids from an `agentic-lint-disable:` comment. Empty set = disable all."""
+    """Extract rule ids from an `bully-disable:` comment. Empty set = disable all."""
     m = _DISABLE_RE.search(text)
     if not m:
         return None, None
@@ -928,7 +919,7 @@ def _line_has_disable(file_path: str, line: int | None, rule_id: str) -> bool:
 def _telemetry_path(config_path: str) -> Path | None:
     """Return the telemetry log path if telemetry is enabled for this project."""
     project_dir = Path(config_path).resolve().parent
-    tel_dir = project_dir / ".agentic-lint"
+    tel_dir = project_dir / ".bully"
     if not tel_dir.is_dir():
         return None
     return tel_dir / "log.jsonl"
@@ -1188,7 +1179,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         description="Agentic Lint pipeline. Runs script and semantic rules for a file.",
     )
     parser.add_argument("positional", nargs="*", help=argparse.SUPPRESS)
-    parser.add_argument("--config", help="Path to .agentic-lint.yml")
+    parser.add_argument("--config", help="Path to .bully.yml")
     parser.add_argument("--file", dest="file_path", help="Target file to evaluate")
     parser.add_argument(
         "--rule",
@@ -1251,7 +1242,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def _cmd_validate(config_path: str | None) -> int:
-    path = config_path or ".agentic-lint.yml"
+    path = config_path or ".bully.yml"
     if not os.path.exists(path):
         print(f"[FAIL] config not found: {path}", file=sys.stderr)
         return 1
@@ -1267,7 +1258,7 @@ def _cmd_validate(config_path: str | None) -> int:
 
 
 def _cmd_show_resolved(config_path: str | None) -> int:
-    path = config_path or ".agentic-lint.yml"
+    path = config_path or ".bully.yml"
     try:
         rules = parse_config(path)
     except ConfigError as e:
@@ -1288,11 +1279,11 @@ def _cmd_doctor() -> int:
     print(f"[OK] Python {sys.version_info.major}.{sys.version_info.minor} >= 3.10")
 
     # Config present
-    cfg = Path.cwd() / ".agentic-lint.yml"
+    cfg = Path.cwd() / ".bully.yml"
     if cfg.is_file():
         print(f"[OK] config present at {cfg}")
     else:
-        print(f"[FAIL] no .agentic-lint.yml at {Path.cwd()}")
+        print(f"[FAIL] no .bully.yml at {Path.cwd()}")
         ok = False
 
     # Config parses
@@ -1362,11 +1353,11 @@ def _cmd_doctor() -> int:
 def _cmd_log_verdict(
     config_path: str | None, rule_id: str, verdict: str, file_path: str | None
 ) -> int:
-    path = config_path or ".agentic-lint.yml"
+    path = config_path or ".bully.yml"
     log_path = _telemetry_path(path)
     if log_path is None:
         print(
-            "telemetry disabled (no .agentic-lint/ directory next to config)",
+            "telemetry disabled (no .bully/ directory next to config)",
             file=sys.stderr,
         )
         return 0
@@ -1383,7 +1374,7 @@ def _cmd_log_verdict(
 
 
 def _cmd_baseline_init(config_path: str | None, glob: str | None) -> int:
-    path = config_path or ".agentic-lint.yml"
+    path = config_path or ".bully.yml"
     cfg_abs = Path(path).resolve()
     if not cfg_abs.exists():
         print(f"config not found: {path}", file=sys.stderr)
@@ -1419,7 +1410,7 @@ def _cmd_baseline_init(config_path: str | None, glob: str | None) -> int:
                     "checksum": checksum,
                 }
             )
-    out_dir = root / ".agentic-lint"
+    out_dir = root / ".bully"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / "baseline.json"
     out.write_text(json.dumps({"baseline": entries}, indent=2) + "\n")
@@ -1435,7 +1426,7 @@ def _find_config_upward(start: Path) -> Path | None:
     if cur.is_file():
         cur = cur.parent
     for p in (cur, *cur.parents):
-        candidate = p / ".agentic-lint.yml"
+        candidate = p / ".bully.yml"
         if candidate.is_file():
             return candidate
     return None

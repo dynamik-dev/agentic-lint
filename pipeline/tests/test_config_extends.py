@@ -1,7 +1,7 @@
 """Tests for the `extends:` resolution in parse_config.
 
 Covers: happy-path inherit + merge, local override, cycle detection,
-`@agentic-lint/<name>` resolution, relative + absolute paths, and missing files.
+relative + absolute paths, and missing files.
 """
 
 import sys
@@ -42,7 +42,7 @@ def _write(path: Path, text: str) -> Path:
 
 def test_extends_relative_path_pulls_rules(tmp_path):
     _write(tmp_path / "base.yml", RULE_BASE)
-    cfg = tmp_path / ".agentic-lint.yml"
+    cfg = tmp_path / ".bully.yml"
     _write(
         cfg,
         'extends: ["./base.yml"]\n' + "rules:\n",
@@ -56,7 +56,7 @@ def test_extends_relative_path_pulls_rules(tmp_path):
 
 def test_local_overrides_inherited(tmp_path, capsys):
     _write(tmp_path / "base.yml", RULE_BASE)
-    cfg = tmp_path / ".agentic-lint.yml"
+    cfg = tmp_path / ".bully.yml"
     _write(
         cfg,
         'extends: ["./base.yml"]\n'
@@ -88,39 +88,17 @@ def test_extends_cycle_raises(tmp_path):
     assert "cycle" in str(exc_info.value).lower()
 
 
-def test_agentic_lint_namespace_resolves_to_packs_dir(tmp_path, monkeypatch):
-    packs_root = tmp_path / "home"
-    packs = packs_root / "examples" / "packs"
-    packs.mkdir(parents=True)
-    _write(
-        packs / "mypack.yml",
-        "rules:\n"
-        "  pack-rule:\n"
-        '    description: "from pack"\n'
-        "    engine: script\n"
-        '    scope: "*.py"\n'
-        "    severity: error\n"
-        '    script: "exit 0"\n',
-    )
-    monkeypatch.setenv("AGENTIC_LINT_HOME", str(packs_root))
-
-    cfg = tmp_path / ".agentic-lint.yml"
-    _write(cfg, 'extends: ["@agentic-lint/mypack"]\nrules:\n')
-    rules = parse_config(str(cfg))
-    assert [r.id for r in rules] == ["pack-rule"]
-
-
 def test_extends_absolute_path(tmp_path):
     abs_base = tmp_path / "elsewhere" / "base.yml"
     _write(abs_base, RULE_BASE)
-    cfg = tmp_path / "project" / ".agentic-lint.yml"
+    cfg = tmp_path / "project" / ".bully.yml"
     _write(cfg, f'extends: ["{abs_base}"]\nrules:\n')
     rules = parse_config(str(cfg))
     assert any(r.id == "from-base" for r in rules)
 
 
 def test_extends_missing_file_raises(tmp_path):
-    cfg = tmp_path / ".agentic-lint.yml"
+    cfg = tmp_path / ".bully.yml"
     _write(cfg, 'extends: ["./does-not-exist.yml"]\nrules:\n')
     with pytest.raises(ConfigError) as exc_info:
         parse_config(str(cfg))
@@ -130,7 +108,7 @@ def test_extends_missing_file_raises(tmp_path):
 def test_multiple_extends_merge_ordered(tmp_path):
     _write(tmp_path / "a.yml", RULE_BASE)
     _write(tmp_path / "b.yml", RULE_OTHER)
-    cfg = tmp_path / ".agentic-lint.yml"
+    cfg = tmp_path / ".bully.yml"
     _write(cfg, 'extends: ["./a.yml", "./b.yml"]\nrules:\n')
     rules = parse_config(str(cfg))
     ids = [r.id for r in rules]
@@ -141,7 +119,7 @@ def test_multiple_extends_merge_ordered(tmp_path):
 def test_extends_block_list_form(tmp_path):
     _write(tmp_path / "a.yml", RULE_BASE)
     _write(tmp_path / "b.yml", RULE_OTHER)
-    cfg = tmp_path / ".agentic-lint.yml"
+    cfg = tmp_path / ".bully.yml"
     _write(
         cfg,
         "extends:\n  - ./a.yml\n  - ./b.yml\nrules:\n",

@@ -1,6 +1,6 @@
 # Rule authoring
 
-How to write, scope, and test rules in `.agentic-lint.yml`.
+How to write, scope, and test rules in `.bully.yml`.
 
 This doc covers the concepts. For the interactive flow — drafting a rule from a natural-language request, testing it against fixtures, and writing to the config — use the `bully-author` skill:
 
@@ -102,7 +102,7 @@ no-compact:
   fix_hint: "replace compact('foo', 'bar') with ['foo' => $foo, 'bar' => $bar]"
 ```
 
-The pipeline passes the string through unchanged as `suggestion` on every `Violation` the rule produces. The `agentic-lint` skill already renders `suggestion`, so the hint shows up next to the violation text with no other plumbing.
+The pipeline passes the string through unchanged as `suggestion` on every `Violation` the rule produces. The `bully` skill already renders `suggestion`, so the hint shows up next to the violation text with no other plumbing.
 
 Keep hints short, mechanical, and universally applicable to the rule — anything that depends on surrounding code belongs in a semantic rule's `description` instead. There is no placeholder syntax; the hint is static text per rule.
 
@@ -182,15 +182,15 @@ Script rules may print violations in several formats. The pipeline's adapter rec
 
 Prefer formats that include a line number. Violations with line numbers are more actionable for the agent.
 
-## Extending a pack
+## Sharing rules across repos with `extends:`
 
-Instead of hand-copying starter rules, pull them in with `extends:`. Starter packs live under `examples/packs/` — `react-ts.yml`, `nextjs.yml`, `django.yml`, `fastapi.yml`, `go.yml`, `rails.yml`, `rust-cli.yml`.
+Bully does not ship blessed packs. If you want to maintain a shared baseline across your own repos, point `extends:` at any path:
 
 ```yaml
 schema_version: 1
 extends:
-  - "@agentic-lint/react-ts"
-  - "./packs/team-overrides.yml"
+  - "../shared/bully-base.yml"
+  - "/opt/company/lint/security.yml"
 
 rules:
   # override an inherited rule by redefining it locally
@@ -204,9 +204,11 @@ rules:
 
 Resolution:
 
-- `@agentic-lint/<name>` picks up `examples/packs/<name>.yml` from the agentic-lint install.
 - `./path` and `../path` resolve relative to the config file.
+- Absolute paths resolve as-is.
 - Local `rules:` override inherited rules by id (whole-rule replacement — fields are not merged).
+
+Looking for rules to copy in directly? Browse `examples/rules/` -- a catalog of common rules by tech. Copy what fits, skip the rest; these are examples, not a baseline.
 
 Cycles and unknown references fail loud at parse time. See [design.md#extends](design.md#extends) for the full semantics.
 
@@ -218,7 +220,7 @@ Before committing a rule, run the validator:
 python3 pipeline/pipeline.py --validate
 ```
 
-It parses `.agentic-lint.yml` (plus anything it extends) with the same hardened reader the hook uses. The validator reports:
+It parses `.bully.yml` (plus anything it extends) with the same hardened reader the hook uses. The validator reports:
 
 - Unknown keys with the line number where they appeared.
 - Wrong types (`severity: "fatal"`, `scope: 42`, etc.).
@@ -236,23 +238,23 @@ Exit code 0 means clean. Exit code 1 prints a report and a non-zero count. Wire 
 For one-off suppressions — a known-safe pattern the rule can't see around — add a directive comment on the offending line:
 
 ```python
-token = os.environ["TEST_TOKEN"]  # agentic-lint-disable: no-hardcoded-secret env lookup, not a literal
+token = os.environ["TEST_TOKEN"]  # bully-disable: no-hardcoded-secret env lookup, not a literal
 ```
 
 ```typescript
-const debug = (...args: unknown[]) => console.log(...args); // agentic-lint-disable: no-console-log dev-only helper
+const debug = (...args: unknown[]) => console.log(...args); // bully-disable: no-console-log dev-only helper
 ```
 
 Rules:
 
-- Syntax: `<comment-prefix> agentic-lint-disable: <rule-id>[,<rule-id>...] <reason>`.
+- Syntax: `<comment-prefix> bully-disable: <rule-id>[,<rule-id>...] <reason>`.
 - Any comment prefix works: `#`, `//`, `--`, `;`.
 - Reason is required. No reason, no suppression.
 - Scoped to the single line the directive appears on. There is no block or file-level form.
 
 The directive is enforced by `pipeline/pipeline.py:parse_disable_directive`. Misspelled rule ids or missing reasons are surfaced as warnings in the hook output so dead directives don't accumulate.
 
-Prefer baselining existing codebases via `.agentic-lint/baseline.json` (see [design.md#baseline-and-disables](design.md#baseline-and-disables)); reserve per-line disables for genuine exceptions.
+Prefer baselining existing codebases via `.bully/baseline.json` (see [design.md#baseline-and-disables](design.md#baseline-and-disables)); reserve per-line disables for genuine exceptions.
 
 ## Testing a rule
 
@@ -260,16 +262,16 @@ Without triggering an Edit, run the pipeline manually:
 
 ```bash
 # Full pipeline against a file
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php
+python3 pipeline/pipeline.py --config .bully.yml --file src/foo.php
 
 # Just one rule (isolate it)
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --rule no-compact
+python3 pipeline/pipeline.py --config .bully.yml --file src/foo.php --rule no-compact
 
 # See the semantic evaluation prompt without calling an LLM
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --print-prompt
+python3 pipeline/pipeline.py --config .bully.yml --file src/foo.php --print-prompt
 
 # Supply a diff manually (bypasses stdin/file-state inference)
-python3 pipeline/pipeline.py --config .agentic-lint.yml --file src/foo.php --diff "$(git diff src/foo.php)"
+python3 pipeline/pipeline.py --config .bully.yml --file src/foo.php --diff "$(git diff src/foo.php)"
 ```
 
 Exit codes:

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "bully-marketplace",
+  "owner": {
+    "name": "dynamik-dev"
+  },
+  "metadata": {
+    "description": "Bully — agent-native linting for Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "bully",
+      "source": "./",
+      "description": "Agent-native lint pipeline for Claude Code. PostToolUse hook enforces a single .bully.yml across script and semantic rules.",
+      "version": "0.1.0",
+      "homepage": "https://github.com/dynamik-dev/bully",
+      "category": "development",
+      "strict": true
+    }
+  ]
+}

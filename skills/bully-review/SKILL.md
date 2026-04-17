@@ -1,6 +1,6 @@
 ---
 name: bully-review
-description: Reviews agentic-lint rule health from the telemetry log. Use when the user says "review my lint rules", "check rule health", "which lint rules are noisy", "find dead lint rules", "agentic-lint review", or asks for an audit of `.agentic-lint.yml`. Surfaces noisy, dead, and slow rules and suggests which to adjust, remove, or promote.
+description: Reviews bully rule health from the telemetry log. Use when the user says "review my lint rules", "check rule health", "which lint rules are noisy", "find dead lint rules", "bully review", or asks for an audit of `.bully.yml`. Surfaces noisy, dead, and slow rules and suggests which to adjust, remove, or promote.
 metadata:
   author: dynamik-dev
   version: 1.0.0
@@ -10,11 +10,11 @@ metadata:
 
 # Agentic Lint Review
 
-Audit `.agentic-lint.yml` using the telemetry log at `.agentic-lint/log.jsonl`. See `docs/telemetry.md` for log schema and scope.
+Audit `.bully.yml` using the telemetry log at `.bully/log.jsonl`. See `docs/telemetry.md` for log schema and scope.
 
 ## Prerequisites
 
-- `.agentic-lint.yml` and `.agentic-lint/log.jsonl` both exist.
+- `.bully.yml` and `.bully/log.jsonl` both exist.
 - If the log is empty, stop and tell the user to make a handful of edits first -- classifying an empty log flags every rule as dead.
 
 ## Known gap: semantic rules are not logged
@@ -27,10 +27,10 @@ Per `docs/telemetry.md` and `docs/plan.md` section 3.4, only script-rule verdict
 ## Step 1: Run the analyzer
 
 ```bash
-python3 pipeline/analyzer.py --log .agentic-lint/log.jsonl
+python3 pipeline/analyzer.py --log .bully/log.jsonl
 ```
 
-Add `--config .agentic-lint.yml --json` when you need structured output to reason over. Thresholds `--noisy-threshold` (default 0.5) and `--slow-threshold-ms` (default 500) are tunable.
+Add `--config .bully.yml --json` when you need structured output to reason over. Thresholds `--noisy-threshold` (default 0.5) and `--slow-threshold-ms` (default 500) are tunable.
 
 ## Step 2: Classify
 
@@ -62,4 +62,4 @@ Follow with brief noisy / dead / slow sections. Do not dump `by_rule` unless ask
 
 ## Step 5: Hand off
 
-Do not edit `.agentic-lint.yml` directly. When the user confirms a recommendation, hand off to the `bully-author` skill to apply it -- that skill tests rules against fixtures before writing.
+Do not edit `.bully.yml` directly. When the user confirms a recommendation, hand off to the `bully-author` skill to apply it -- that skill tests rules against fixtures before writing.

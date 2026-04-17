@@ -28,14 +28,14 @@ def _run(args, cwd: Path | None = None) -> subprocess.CompletedProcess:
 
 
 def test_log_verdict_appends_record(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully").mkdir()
 
     r = _run(
         [
             "--log-verdict",
             "--config",
-            str(tmp_path / ".agentic-lint.yml"),
+            str(tmp_path / ".bully.yml"),
             "--rule",
             "my-rule",
             "--verdict",
@@ -46,7 +46,7 @@ def test_log_verdict_appends_record(tmp_path):
     )
     assert r.returncode == 0, f"stderr={r.stderr}"
 
-    log = tmp_path / ".agentic-lint" / "log.jsonl"
+    log = tmp_path / ".bully" / "log.jsonl"
     assert log.is_file()
     records = [json.loads(line) for line in log.read_text().strip().splitlines()]
     assert len(records) == 1
@@ -59,14 +59,14 @@ def test_log_verdict_appends_record(tmp_path):
 
 
 def test_log_verdict_pass_recorded(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully").mkdir()
 
     r = _run(
         [
             "--log-verdict",
             "--config",
-            str(tmp_path / ".agentic-lint.yml"),
+            str(tmp_path / ".bully.yml"),
             "--rule",
             "my-rule",
             "--verdict",
@@ -77,7 +77,7 @@ def test_log_verdict_pass_recorded(tmp_path):
 
     records = [
         json.loads(line)
-        for line in (tmp_path / ".agentic-lint" / "log.jsonl").read_text().splitlines()
+        for line in (tmp_path / ".bully" / "log.jsonl").read_text().splitlines()
         if line.strip()
     ]
     assert records[0]["verdict"] == "pass"
@@ -86,14 +86,14 @@ def test_log_verdict_pass_recorded(tmp_path):
 
 
 def test_log_verdict_silently_skips_when_no_dir(tmp_path):
-    # No .agentic-lint/ directory -> telemetry disabled; exit 0 without error.
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    # No .bully/ directory -> telemetry disabled; exit 0 without error.
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
 
     r = _run(
         [
             "--log-verdict",
             "--config",
-            str(tmp_path / ".agentic-lint.yml"),
+            str(tmp_path / ".bully.yml"),
             "--rule",
             "my-rule",
             "--verdict",
@@ -102,24 +102,24 @@ def test_log_verdict_silently_skips_when_no_dir(tmp_path):
     )
     assert r.returncode == 0
     # No log file was created
-    assert not (tmp_path / ".agentic-lint" / "log.jsonl").exists()
+    assert not (tmp_path / ".bully" / "log.jsonl").exists()
     assert "telemetry disabled" in r.stderr.lower()
 
 
 def test_log_verdict_requires_rule_and_verdict(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
-    r = _run(["--log-verdict", "--config", str(tmp_path / ".agentic-lint.yml")])
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
+    r = _run(["--log-verdict", "--config", str(tmp_path / ".bully.yml")])
     assert r.returncode != 0
     assert "usage" in r.stderr.lower() or "rule" in r.stderr.lower()
 
 
 def test_log_verdict_invalid_verdict_rejected(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
     r = _run(
         [
             "--log-verdict",
             "--config",
-            str(tmp_path / ".agentic-lint.yml"),
+            str(tmp_path / ".bully.yml"),
             "--rule",
             "my-rule",
             "--verdict",
@@ -132,17 +132,17 @@ def test_log_verdict_invalid_verdict_rejected(tmp_path):
 
 
 def test_log_verdict_appends_without_overwriting(tmp_path):
-    (tmp_path / ".agentic-lint.yml").write_text(RULE_YAML)
-    (tmp_path / ".agentic-lint").mkdir()
+    (tmp_path / ".bully.yml").write_text(RULE_YAML)
+    (tmp_path / ".bully").mkdir()
     # Pre-existing log line
-    log = tmp_path / ".agentic-lint" / "log.jsonl"
+    log = tmp_path / ".bully" / "log.jsonl"
     log.write_text('{"existing":"entry"}\n')
 
     _run(
         [
             "--log-verdict",
             "--config",
-            str(tmp_path / ".agentic-lint.yml"),
+            str(tmp_path / ".bully.yml"),
             "--rule",
             "my-rule",
             "--verdict",

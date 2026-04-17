@@ -1,18 +1,9 @@
-# Next.js starter rule pack
+# Example rules for Next.js projects.
 #
-# Stack: Next.js (Pages Router or App Router) projects in TypeScript
-# or JavaScript. Pair with the `react-ts` pack for broader React rules.
-#
-# How to use:
-#   - Copy these rules into your project's `.agentic-lint.yml` under
-#     the `rules:` key, or
-#   - Once the extends mechanism ships (see docs/plan.md section 3.2):
-#
-#       extends: ["@agentic-lint/nextjs"]
-#
-# These are starting points. Tighten `scope` to your actual source
-# layout (`app/**/*.tsx`, `pages/**/*.tsx`, `components/**/*.tsx`) and
-# flip severities to match your team's tolerance.
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-html-anchor-for-internal-routes:

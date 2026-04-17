@@ -1,13 +1,9 @@
-# Rust CLI rule pack for agentic-lint.
+# Example rules for Rust CLI projects.
 #
-# Framework: Rust binary crates built on clap/structopt plus a small set
-# of library modules under `src/`. Also useful for the lib half of a
-# hybrid crate.
-# Usage: copy or reference in `.agentic-lint.yml`. These rules nudge CLI
-# projects toward the same error-handling and boundary discipline that
-# crates like `ripgrep`, `bat`, and `cargo` follow. They are starting
-# points -- adjust severities and scopes to your codebase, and rely on
-# `cargo clippy` for the deeper analytical work.
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-unwrap-in-library:

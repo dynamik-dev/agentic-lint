@@ -1,19 +1,9 @@
-# Django starter rule pack
+# Example rules for Django projects.
 #
-# Stack: Django projects (any recent version). Targets Python source
-# files; tighten `scope` to your apps directory (`apps/**/*.py`) to
-# avoid scanning migrations or third-party code.
-#
-# How to use:
-#   - Copy these rules into your project's `.agentic-lint.yml` under
-#     the `rules:` key, or
-#   - Once the extends mechanism ships (see docs/plan.md section 3.2):
-#
-#       extends: ["@agentic-lint/django"]
-#
-# These are starting points. Adjust `severity` and `scope` to match
-# your codebase conventions -- for instance, you may want to exclude
-# `migrations/` and generated admin code.
+# These are opinions, not a curated baseline. Bully does not ship a blessed
+# "pack" -- this file is a catalog. Browse it, copy the rules that fit your
+# team into your `.bully.yml`, skip the rest. Tune `severity` (error vs
+# warning) and `scope` globs for how your codebase is laid out.
 
 rules:
   no-bare-filter-get:

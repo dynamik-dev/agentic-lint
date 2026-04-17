@@ -1,6 +1,6 @@
 ---
 name: bully-author
-description: Authors, modifies, or removes rules in `.agentic-lint.yml`. Use when the user says "add a lint rule for X", "ban Y", "tighten <rule-id>", "make <rule-id> a warning", "convert <rule-id> to semantic", "remove <rule-id>", "change the scope of <rule-id>", or asks to apply recommendations from `/bully-review`. Always tests a rule against a fixture before writing it to the config.
+description: Authors, modifies, or removes rules in `.bully.yml`. Use when the user says "add a lint rule for X", "ban Y", "tighten <rule-id>", "make <rule-id> a warning", "convert <rule-id> to semantic", "remove <rule-id>", "change the scope of <rule-id>", or asks to apply recommendations from `/bully-review`. Always tests a rule against a fixture before writing it to the config.
 metadata:
   author: dynamik-dev
   version: 1.0.0
@@ -10,9 +10,9 @@ metadata:
 
 # Agentic Lint Author
 
-Interactive authoring for `.agentic-lint.yml`. Every proposed rule is tested against a fixture before being written.
+Interactive authoring for `.bully.yml`. Every proposed rule is tested against a fixture before being written.
 
-If no `.agentic-lint.yml` exists, stop and tell the user to run `/bully-init` first.
+If no `.bully.yml` exists, stop and tell the user to run `/bully-init` first.
 
 See `docs/rule-authoring.md` for full field reference and the rule quality checklist.
 
@@ -47,36 +47,36 @@ If unsure, ask the user. Do not auto-promote semantic to script without confirma
 
 ## Fixture-testing protocol (MANDATORY)
 
-Never write a rule to `.agentic-lint.yml` without running this protocol first.
+Never write a rule to `.bully.yml` without running this protocol first.
 
 1. Create two fixture files with the Write tool:
-   - `/tmp/agentic-lint-probe-violating.<ext>` -- must trigger the rule.
-   - `/tmp/agentic-lint-probe-clean.<ext>` -- must not trigger.
+   - `/tmp/bully-probe-violating.<ext>` -- must trigger the rule.
+   - `/tmp/bully-probe-clean.<ext>` -- must not trigger.
 2. Copy the current config to a draft:
    ```bash
-   cp .agentic-lint.yml /tmp/agentic-lint-draft.yml
+   cp .bully.yml /tmp/bully-draft.yml
    ```
-3. Edit `/tmp/agentic-lint-draft.yml` to append the proposed rule.
+3. Edit `/tmp/bully-draft.yml` to append the proposed rule.
 4. Run the pipeline with `--rule` against each fixture:
    ```bash
    # Script rule -- violating must exit 2, clean must exit 0
    python3 pipeline/pipeline.py \
-     --config /tmp/agentic-lint-draft.yml \
-     --file /tmp/agentic-lint-probe-violating.<ext> \
+     --config /tmp/bully-draft.yml \
+     --file /tmp/bully-probe-violating.<ext> \
      --rule <new-rule-id>
 
    python3 pipeline/pipeline.py \
-     --config /tmp/agentic-lint-draft.yml \
-     --file /tmp/agentic-lint-probe-clean.<ext> \
+     --config /tmp/bully-draft.yml \
+     --file /tmp/bully-probe-clean.<ext> \
      --rule <new-rule-id>
    ```
 5. For **semantic rules**, use `--print-prompt` instead of asserting exit codes. Read the rendered prompt and confirm it would correctly judge both fixtures. If unclear, sharpen the description and re-test.
 6. Only on pass, proceed to the write step.
-7. Clean up: `rm -f /tmp/agentic-lint-probe-*.* /tmp/agentic-lint-draft.yml`.
+7. Clean up: `rm -f /tmp/bully-probe-*.* /tmp/bully-draft.yml`.
 
 Invariants: fixtures exist before testing; both violating and compliant fixtures (or `--print-prompt`) are exercised; the draft config is used, not the real one; exit codes match expectations before writing.
 
-## YAML edit pattern for `.agentic-lint.yml`
+## YAML edit pattern for `.bully.yml`
 
 The parser is fixed-indent. Do not reformat the file.
 
@@ -100,10 +100,10 @@ The parser is fixed-indent. Do not reformat the file.
 1. Classify (script vs semantic).
 2. Collect `id` (kebab-case, unique), `description`, `engine`, `scope`, `severity`, and `script` if applicable.
 3. Run the fixture-testing protocol.
-4. Edit `.agentic-lint.yml` to append the rule.
+4. Edit `.bully.yml` to append the rule.
 5. Sanity-check against 2-3 existing project files:
    ```bash
-   python3 pipeline/pipeline.py --config .agentic-lint.yml --file <existing-file> --rule <new-rule-id>
+   python3 pipeline/pipeline.py --config .bully.yml --file <existing-file> --rule <new-rule-id>
    ```
    In this repo, also run `bash scripts/dogfood.sh`. If the rule mass-flags the codebase, narrow it or treat the flags as real cleanup.
 6. Report and invite the user to review before committing.
@@ -124,7 +124,7 @@ The parser is fixed-indent. Do not reformat the file.
 
 1. Confirm it is genuinely unused:
    ```bash
-   grep '"id": "<rule-id>"' .agentic-lint/log.jsonl | tail -10
+   grep '"id": "<rule-id>"' .bully/log.jsonl | tail -10
    ```
    Noisy != dead. If the rule has fired recently, challenge the removal and propose tightening.
 2. Delete from `  <rule-id>:` through the last field line of that block.
@@ -132,7 +132,7 @@ The parser is fixed-indent. Do not reformat the file.
    ```bash
    bash scripts/dogfood.sh
    # or
-   python3 pipeline/pipeline.py --config .agentic-lint.yml --file <existing-file>
+   python3 pipeline/pipeline.py --config .bully.yml --file <existing-file>
    ```
 
 ## Applying review recommendations
@@ -154,4 +154,4 @@ Apply one recommendation at a time. Test each before moving on. Never batch.
 - **Pattern matches too much**: add `[^a-zA-Z_]` guards, anchor at line start, exclude comments via `grep -v`.
 - **Pattern does not match**: try `grep -E` or `-P`; test the raw pattern against the fixture before wrapping in `&& exit 1 || exit 0`.
 - **Scope mismatches**: test in Python -- `PurePath(path).match(glob)`.
-- **Editing `.agentic-lint.yml` triggers the hook**: harmless unless a `*.yml`-scoped rule flags the config itself; fix the scope.
+- **Editing `.bully.yml` triggers the hook**: harmless unless a `*.yml`-scoped rule flags the config itself; fix the scope.

@@ -1,7 +1,7 @@
 """
 Agentic Lint Rule-Health Analyzer
 
-Reads .agentic-lint/log.jsonl and produces a structured report that highlights:
+Reads .bully/log.jsonl and produces a structured report that highlights:
 - Noisy rules (violation rate above a threshold)
 - Dead rules (rules in the config that never fired in the log window)
 - Slow rules (mean latency above a threshold)
@@ -194,7 +194,7 @@ def main() -> None:
         description="Agentic Lint rule-health analyzer.",
     )
     parser.add_argument("--log", required=True, help="Path to log.jsonl")
-    parser.add_argument("--config", required=True, help="Path to .agentic-lint.yml")
+    parser.add_argument("--config", required=True, help="Path to .bully.yml")
     parser.add_argument(
         "--json",
         action="store_true",

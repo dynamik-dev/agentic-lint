@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the agentic-lint pipeline against every source file in this repo.
+# Run the bully pipeline against every source file in this repo.
 # Dogfooding: the tool should lint itself cleanly.
 
 set -euo pipefail
@@ -7,9 +7,9 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
-CONFIG="$REPO_DIR/.agentic-lint.yml"
+CONFIG="$REPO_DIR/.bully.yml"
 if [[ ! -f "$CONFIG" ]]; then
-  echo "no .agentic-lint.yml at repo root -- skipping dogfood"
+  echo "no .bully.yml at repo root -- skipping dogfood"
   exit 0
 fi
 
@@ -35,7 +35,7 @@ done < <(
     \( -name "*.py" -o -name "*.sh" -o -name "*.md" -o -name "*.yml" -o -name "*.yaml" \) \
     ! -path "*/.pytest_cache/*" \
     ! -path "*/__pycache__/*" \
-    ! -path "*/.agentic-lint/*" \
+    ! -path "*/.bully/*" \
     2>/dev/null
 )
 

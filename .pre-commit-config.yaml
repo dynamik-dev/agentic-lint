@@ -13,8 +13,8 @@ repos:
 
   - repo: local
     hooks:
-      - id: agentic-lint-dogfood
-        name: agentic-lint on its own source
+      - id: bully-dogfood
+        name: bully on its own source
         entry: scripts/dogfood.sh
         language: system
         pass_filenames: false

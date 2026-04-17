@@ -4,15 +4,15 @@ Every pipeline run can append a record to a telemetry log. The `bully-review` sk
 
 ## Enabling
 
-Telemetry is opt-in. Create the log directory next to `.agentic-lint.yml`:
+Telemetry is opt-in. Create the log directory next to `.bully.yml`:
 
 ```bash
-mkdir .agentic-lint
+mkdir .bully
 ```
 
-From that point on, every pipeline run appends one line to `.agentic-lint/log.jsonl`. Removing the directory turns logging off.
+From that point on, every pipeline run appends one line to `.bully/log.jsonl`. Removing the directory turns logging off.
 
-The pipeline never auto-creates the directory. This is deliberate — a repo with no `.agentic-lint/` is an explicit "do not write here" signal.
+The pipeline never auto-creates the directory. This is deliberate — a repo with no `.bully/` is an explicit "do not write here" signal.
 
 ## What gets logged
 
@@ -66,7 +66,7 @@ Per-rule:
 
 | Field | Description |
 |-------|-------------|
-| `id` | Rule id from `.agentic-lint.yml`. |
+| `id` | Rule id from `.bully.yml`. |
 | `engine` | `script` or `semantic`. |
 | `verdict` | `pass`, `violation`, or `evaluate_requested`. |
 | `severity` | `error` or `warning`. |
@@ -85,7 +85,7 @@ The pipeline ships two extra record types that close the semantic-rule telemetry
 
 ### `semantic_verdict`
 
-After the `agentic-lint` skill finishes evaluating a semantic payload, it calls:
+After the `bully` skill finishes evaluating a semantic payload, it calls:
 
 ```bash
 python3 pipeline/pipeline.py --log-verdict \
@@ -127,14 +127,14 @@ Before dispatching the evaluator the pipeline applies cheap "can't possibly matc
 
 ### Note on skill version
 
-`semantic_verdict` depends on the `agentic-lint` skill being up to date — older versions do not call `--log-verdict`. If verdict records are missing for known-firing semantic rules, update the skill or bypass the evaluator manually (`pipeline.py --log-verdict` is a plain CLI). `semantic_skipped` is pipeline-side and independent of the skill.
+`semantic_verdict` depends on the `bully` skill being up to date — older versions do not call `--log-verdict`. If verdict records are missing for known-firing semantic rules, update the skill or bypass the evaluator manually (`pipeline.py --log-verdict` is a plain CLI). `semantic_skipped` is pipeline-side and independent of the skill.
 
 ## Running the analyzer
 
 ```bash
 python3 pipeline/analyzer.py \
-  --log .agentic-lint/log.jsonl \
-  --config .agentic-lint.yml
+  --log .bully/log.jsonl \
+  --config .bully.yml
 ```
 
 Output:
@@ -182,11 +182,11 @@ The `bully-review` skill wraps the analyzer and produces a prioritized punch lis
 > /bully-review
 ```
 
-The skill runs the analyzer, interprets the findings in context, and recommends concrete actions. It never modifies `.agentic-lint.yml` without your confirmation.
+The skill runs the analyzer, interprets the findings in context, and recommends concrete actions. It never modifies `.bully.yml` without your confirmation.
 
 ## Workflow: introducing a new rule
 
-1. Add the rule to `.agentic-lint.yml` with `severity: warning`.
+1. Add the rule to `.bully.yml` with `severity: warning`.
 2. Let it run across a few hundred edits.
 3. `/bully-review`.
 4. If the rule is noisy, sharpen its pattern or description before promoting.
@@ -197,7 +197,7 @@ The skill runs the analyzer, interprets the findings in context, and recommends 
 
 1. `/bully-review` identifies a dead rule.
 2. Verify the scope isn't misconfigured. (A common cause: rule scoped `src/*.ts` when the project uses `packages/*/src/*.ts`.)
-3. If the rule is genuinely unused, remove it from `.agentic-lint.yml`.
+3. If the rule is genuinely unused, remove it from `.bully.yml`.
 4. The telemetry log retains history; removed rules simply stop appearing in future records.
 
 ## Privacy and log hygiene
@@ -205,7 +205,7 @@ The skill runs the analyzer, interprets the findings in context, and recommends 
 - The log contains file paths and rule outcomes — no file contents, no diffs, no code.
 - Log lines are append-only. The pipeline never rewrites or truncates.
 - Rotate manually when the log grows beyond your tolerance. `jq` over multi-MB JSONL is cheap; the analyzer has no pagination built in yet.
-- Gitignore `.agentic-lint/` if you don't want telemetry in version control. It's per-developer data, not project config.
+- Gitignore `.bully/` if you don't want telemetry in version control. It's per-developer data, not project config.
 
 ## What telemetry does not do (yet)
 
