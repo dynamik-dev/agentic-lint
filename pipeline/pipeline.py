@@ -1434,10 +1434,10 @@ def _append_record(log_path: Path, record: dict) -> None:
 class _NoopPhaseTimer:
     """Default phase timer: every call is a no-op context manager."""
 
-    def __call__(self, name: str) -> "_NoopPhaseTimer":
+    def __call__(self, name: str):
         return self
 
-    def __enter__(self) -> "_NoopPhaseTimer":
+    def __enter__(self):
         return self
 
     def __exit__(self, *a) -> bool:

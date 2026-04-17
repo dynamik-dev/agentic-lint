@@ -59,7 +59,13 @@ def test_phase_timer_records_each_phase(tmp_path, monkeypatch):
             return False
 
     pl.run_pipeline(str(cfg), str(target), diff="", phase_timer=Recorder())
-    assert "skip_check" in seen
-    assert "parse_config" in seen
-    assert "filter_rules" in seen
-    assert "script_exec" in seen
+    expected = {
+        "skip_check",
+        "trust_gate",
+        "parse_config",
+        "filter_rules",
+        "script_exec",
+        "ast_exec",
+        "semantic_build",
+    }
+    assert set(seen) == expected
