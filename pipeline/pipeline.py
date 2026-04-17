@@ -1455,7 +1455,7 @@ def run_pipeline(
     log_path = _telemetry_path(config_path)
 
     # Short-circuit auto-generated files (built-in + user-global + project skip).
-    extra_skip = effective_skip_patterns(config_path)[len(SKIP_PATTERNS):]
+    extra_skip = effective_skip_patterns(config_path)[len(SKIP_PATTERNS) :]
     if _path_matches_skip(file_path, extra_patterns=extra_skip):
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         result = {"status": "skipped", "file": file_path, "reason": "auto-generated"}
@@ -2094,7 +2094,7 @@ def _cmd_baseline_init(config_path: str | None, glob: str | None) -> int:
     root = cfg_abs.parent
     if not glob:
         glob = "**/*"
-    extra_skip = effective_skip_patterns(str(cfg_abs))[len(SKIP_PATTERNS):]
+    extra_skip = effective_skip_patterns(str(cfg_abs))[len(SKIP_PATTERNS) :]
     entries: list[dict] = []
     for candidate in root.glob(glob):
         if not candidate.is_file():

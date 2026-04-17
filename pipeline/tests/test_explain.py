@@ -149,7 +149,7 @@ def test_explain_flag_shows_pass_verdict_for_clean_script_rule(tmp_path):
 
 
 def test_hook_mode_output_does_not_include_semantic_skipped(tmp_path):
-    cfg = _write_semantic_only_config(tmp_path)
+    _write_semantic_only_config(tmp_path)
     target = tmp_path / "x.py"
     target.write_text("print('hi')\n")
     payload = {

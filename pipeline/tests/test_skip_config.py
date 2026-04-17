@@ -87,12 +87,7 @@ def test_user_global_skips_loaded_when_present(tmp_path, monkeypatch):
 
     fake_home = tmp_path / "home"
     fake_home.mkdir()
-    (fake_home / ".bully-ignore").write_text(
-        "# this is a comment\n"
-        "\n"
-        "node_modules/**\n"
-        "target/**\n"
-    )
+    (fake_home / ".bully-ignore").write_text("# this is a comment\n\nnode_modules/**\ntarget/**\n")
     monkeypatch.setenv("HOME", str(fake_home))
 
     patterns = effective_skip_patterns(str(cfg))
