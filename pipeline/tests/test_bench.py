@@ -69,3 +69,23 @@ def test_phase_timer_records_each_phase(tmp_path, monkeypatch):
         "semantic_build",
     }
     assert set(seen) == expected
+
+
+def test_bench_cli_entrypoint_exists():
+    """`bully bench --help` exits cleanly (implies argparse wiring is in place)."""
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pipeline.pipeline", "bench", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "bench" in (result.stdout + result.stderr).lower()
+
+
+def test_bench_module_imports():
+    """bench module loads without requiring anthropic."""
+    from pipeline import bench
+
+    assert hasattr(bench, "main")

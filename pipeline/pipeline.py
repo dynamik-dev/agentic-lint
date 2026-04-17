@@ -2240,6 +2240,13 @@ def _hook_mode() -> int:
 
 
 def main() -> None:
+    # Short-circuit: `bully bench ...` dispatches to the bench CLI directly,
+    # bypassing the main parser (which uses a flat flag model).
+    if len(sys.argv) >= 2 and sys.argv[1] == "bench":
+        from pipeline.bench import main as bench_main
+
+        sys.exit(bench_main(sys.argv[2:]))
+
     args = _parse_args(sys.argv[1:])
 
     # Subcommands.
@@ -2357,6 +2364,21 @@ def main() -> None:
     if result.get("status") == "blocked":
         sys.stderr.write(_format_blocked_stderr(result))
         sys.exit(2)
+
+
+def __getattr__(name: str):
+    """Lazy-load submodules so `from pipeline import bench` works when
+    this file is imported as a flat module (e.g. in the test suite)."""
+    import importlib.util
+    import pathlib
+
+    submodule_path = pathlib.Path(__file__).parent / f"{name}.py"
+    if submodule_path.exists():
+        spec = importlib.util.spec_from_file_location(f"pipeline.{name}", submodule_path)
+        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        return mod
+    raise AttributeError(f"module 'pipeline' has no attribute {name!r}")
 
 
 if __name__ == "__main__":
