@@ -816,9 +816,7 @@ def build_semantic_payload(
 # Baseline + per-line disables
 # ---------------------------------------------------------------------------
 
-_DISABLE_RE = re.compile(
-    r"bully-disable\s*:?\s*(?P<ids>[^#\n\r]*?)(?:\s+(?P<reason>[^#\n\r]+))?$"
-)
+_DISABLE_RE = re.compile(r"bully-disable\s*:?\s*(?P<ids>[^#\n\r]*?)(?:\s+(?P<reason>[^#\n\r]+))?$")
 
 
 def _baseline_path(config_path: str) -> Path:
