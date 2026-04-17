@@ -14,11 +14,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import statistics
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -282,6 +284,125 @@ def run_fixture(
     }
 
 
+def _git_sha() -> str | None:
+    """Best-effort current git SHA; None if git unavailable or not a repo."""
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip() or None
+
+
+def _git_dirty() -> bool:
+    """True iff there are uncommitted changes."""
+    try:
+        r = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return bool(r.stdout.strip())
+
+
+def _anthropic_sdk_version() -> str | None:
+    mod = _import_anthropic()
+    return getattr(mod, "__version__", None) if mod else None
+
+
+def run_mode_a(
+    *,
+    fixtures_dir: Path,
+    history_path: Path,
+    use_api: bool = True,
+    iterations: int = 5,
+    skip_cold_start: bool = False,
+    emit_json: bool = False,
+) -> int:
+    """Run every fixture in `fixtures_dir`, append a record to `history_path`."""
+    fixtures = discover_fixtures(fixtures_dir)
+    if not fixtures:
+        sys.stderr.write(f"bench: no fixtures found in {fixtures_dir}\n")
+        return 1
+
+    results = []
+    for fx in fixtures:
+        results.append(
+            run_fixture(
+                fx,
+                iterations=iterations,
+                use_api=use_api,
+                skip_cold_start=skip_cold_start,
+            )
+        )
+
+    total_wall = sum(r["wall_ms_p50"] for r in results)
+    cold_vals = [r["cold_start_ms"] for r in results if r.get("cold_start_ms") is not None]
+    total_cold = sum(cold_vals) if cold_vals else None
+    total_tokens = sum(r["tokens"]["input"] for r in results)
+    methods = {r["tokens"]["method"] for r in results if r["tokens"]["input"]}
+    record = {
+        "ts": datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+        "git_sha": _git_sha(),
+        "git_dirty": _git_dirty(),
+        "python_version": platform.python_version(),
+        "anthropic_sdk_version": _anthropic_sdk_version(),
+        "machine": f"{platform.system().lower()}-{platform.release()}",
+        "fixtures": results,
+        "aggregates": {
+            "total_wall_ms_p50": total_wall,
+            "total_cold_start_ms": total_cold,
+            "total_input_tokens": total_tokens,
+            "tokens_method": next(iter(methods)) if len(methods) == 1 else "mixed",
+        },
+    }
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with history_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+    if emit_json:
+        print(json.dumps(record, indent=2))
+    else:
+        _print_mode_a_summary(record)
+    return 0
+
+
+def _print_mode_a_summary(record: dict) -> None:
+    """Render a human-readable summary of a Mode A record to stdout."""
+    print(f"bench run @ {record['ts']}  (sha={record['git_sha'] or '?'})")
+    print(f"  python={record['python_version']}  machine={record['machine']}")
+    print()
+    print(
+        f"  {'fixture':<32} {'wall_p50_ms':>12} {'cold_ms':>10} "
+        f"{'tokens':>9}  method"
+    )
+    for r in record["fixtures"]:
+        cold = r.get("cold_start_ms")
+        cold_str = f"{cold:.1f}" if isinstance(cold, (int, float)) else "-"
+        print(
+            f"  {r['name']:<32} {r['wall_ms_p50']:>12.2f} {cold_str:>10} "
+            f"{r['tokens']['input']:>9}  {r['tokens']['method']}"
+        )
+    agg = record["aggregates"]
+    print()
+    print(
+        f"  totals: wall_p50={agg['total_wall_ms_p50']:.1f}ms  "
+        f"cold={agg['total_cold_start_ms'] or 0:.1f}ms  "
+        f"tokens={agg['total_input_tokens']} ({agg['tokens_method']})"
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="bully bench",
@@ -317,11 +438,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to history JSONL (default: bench/history.jsonl).",
     )
 
-    parser.parse_args(argv)
+    args = parser.parse_args(argv)
 
-    # Stub: subsequent tasks will dispatch to mode_a / mode_b / compare.
-    print("bench: not yet implemented", file=sys.stderr)
-    return 1
+    if args.config:
+        sys.stderr.write("bench: mode B (--config) not yet implemented\n")
+        return 1
+    if args.compare:
+        sys.stderr.write("bench: --compare not yet implemented\n")
+        return 1
+    return run_mode_a(
+        fixtures_dir=Path(args.fixtures_dir),
+        history_path=Path(args.history),
+        use_api=not args.no_tokens,
+        emit_json=args.json,
+    )
 
 
 if __name__ == "__main__":

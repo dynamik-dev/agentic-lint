@@ -299,3 +299,68 @@ def test_run_fixture_returns_structured_result(tmp_path, monkeypatch):
     assert "parse_config" in result["phases_ms"]
     assert result["tokens"]["method"] == "n/a-no-semantic-rules"
     assert result["tokens"]["input"] == 0
+
+
+def test_run_mode_a_writes_history_line(tmp_path, monkeypatch):
+    """Mode A writes one JSONL line per run with fixture results + aggregates."""
+    import json as _json
+
+    from bench import run_mode_a
+
+    # Build two fixtures.
+    fixtures_root = tmp_path / "fixtures"
+    for name in ("a", "b"):
+        d = fixtures_root / name
+        d.mkdir(parents=True)
+        (d / "config.yml").write_text(
+            "rules:\n"
+            "  r:\n"
+            "    description: d\n"
+            "    engine: script\n"
+            "    scope: '**/*.py'\n"
+            "    severity: warning\n"
+            "    script: 'exit 0'\n"
+        )
+        (d / "fixture.json").write_text(
+            '{"name": "' + name + '", "description": "x",'
+            ' "file_path": "x.py", "edit_type": "Edit", "diff": ""}'
+        )
+    (tmp_path / "x.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("BULLY_TRUST_ALL", "1")
+
+    history_path = tmp_path / "history.jsonl"
+    rc = run_mode_a(
+        fixtures_dir=fixtures_root,
+        history_path=history_path,
+        use_api=False,
+        iterations=2,
+        skip_cold_start=True,
+        emit_json=True,
+    )
+    assert rc == 0
+    assert history_path.is_file()
+    lines = history_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    record = _json.loads(lines[0])
+    assert "ts" in record
+    assert "fixtures" in record
+    assert len(record["fixtures"]) == 2
+    assert {f["name"] for f in record["fixtures"]} == {"a", "b"}
+    assert "aggregates" in record
+    assert "total_wall_ms_p50" in record["aggregates"]
+
+
+def test_run_mode_a_errors_when_no_fixtures(tmp_path, capsys):
+    """Mode A returns non-zero and prints an error when no fixtures exist."""
+    from bench import run_mode_a
+
+    history_path = tmp_path / "h.jsonl"
+    rc = run_mode_a(
+        fixtures_dir=tmp_path / "missing",
+        history_path=history_path,
+        use_api=False,
+    )
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "no fixtures" in err.lower()
