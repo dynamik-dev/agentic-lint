@@ -364,3 +364,62 @@ def test_run_mode_a_errors_when_no_fixtures(tmp_path, capsys):
     assert rc != 0
     err = capsys.readouterr().err
     assert "no fixtures" in err.lower()
+
+
+def test_compare_reports_deltas_between_last_two_runs(tmp_path, capsys):
+    """--compare prints a delta table for the last two history entries."""
+    import json as _json
+
+    from bench import run_compare
+
+    history = tmp_path / "h.jsonl"
+    older = {
+        "ts": "2026-04-15T10:00:00Z",
+        "git_sha": "aaa",
+        "fixtures": [
+            {"name": "a", "wall_ms_p50": 10.0, "tokens": {"input": 100,
+                "method": "count_tokens"}},
+        ],
+        "aggregates": {
+            "total_wall_ms_p50": 10.0,
+            "total_input_tokens": 100,
+        },
+    }
+    newer = {
+        "ts": "2026-04-17T12:00:00Z",
+        "git_sha": "bbb",
+        "fixtures": [
+            {"name": "a", "wall_ms_p50": 15.0, "tokens": {"input": 120,
+                "method": "count_tokens"}},
+        ],
+        "aggregates": {
+            "total_wall_ms_p50": 15.0,
+            "total_input_tokens": 120,
+        },
+    }
+    history.write_text(_json.dumps(older) + "\n" + _json.dumps(newer) + "\n")
+
+    rc = run_compare(history_path=history)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "aaa" in out and "bbb" in out
+    # Wall delta is +5.00; token delta is +20
+    assert "+5" in out
+    assert "+20" in out
+
+
+def test_compare_fails_when_fewer_than_two_runs(tmp_path, capsys):
+    """--compare needs at least two runs to produce a delta."""
+    import json as _json
+
+    from bench import run_compare
+
+    history = tmp_path / "h.jsonl"
+    history.write_text(
+        _json.dumps({"ts": "t", "fixtures": [], "aggregates": {}}) + "\n"
+    )
+
+    rc = run_compare(history_path=history)
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "two runs" in err.lower() or "2 runs" in err.lower()
