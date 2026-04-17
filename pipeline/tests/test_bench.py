@@ -233,3 +233,68 @@ def test_load_evaluator_system_prompt_strips_frontmatter(tmp_path, monkeypatch):
     text = bench.load_evaluator_system_prompt()
     assert text.startswith("You are the evaluator")
     assert "---" not in text
+
+
+def test_phasetimer_records_all_phase_durations():
+    """PhaseTimer records a list of (name, ns) for each phase invocation."""
+    import time
+
+    from bench import PhaseTimer
+
+    pt = PhaseTimer()
+    with pt("a"):
+        time.sleep(0.001)
+    with pt("b"):
+        time.sleep(0.002)
+    results = pt.results_ns()
+    assert "a" in results
+    assert "b" in results
+    # Each phase tracked at least one sample.
+    assert len(results["a"]) == 1
+    assert len(results["b"]) == 1
+    assert results["a"][0] > 0
+    assert results["b"][0] > 0
+
+
+def test_run_fixture_returns_structured_result(tmp_path, monkeypatch):
+    """run_fixture returns per-phase median/p95 plus cold-start and tokens."""
+    from bench import Fixture, run_fixture
+
+    fx_dir = tmp_path / "fx"
+    fx_dir.mkdir()
+    cfg = fx_dir / "config.yml"
+    cfg.write_text(
+        "rules:\n"
+        "  r1:\n"
+        "    description: d\n"
+        "    engine: script\n"
+        "    scope: '**/*.py'\n"
+        "    severity: warning\n"
+        "    script: 'exit 0'\n"
+    )
+    (fx_dir / "fixture.json").write_text(
+        '{"name": "fx", "description": "x", "file_path": "a.py",'
+        ' "edit_type": "Edit", "diff": ""}'
+    )
+    target = tmp_path / "a.py"
+    target.write_text("x = 1\n")
+
+    monkeypatch.setenv("BULLY_TRUST_ALL", "1")
+    monkeypatch.chdir(tmp_path)
+
+    fx = Fixture(
+        name="fx",
+        description="x",
+        file_path=str(target),
+        edit_type="Edit",
+        diff="",
+        config_path=cfg,
+    )
+    result = run_fixture(fx, iterations=3, use_api=False, skip_cold_start=True)
+    assert result["name"] == "fx"
+    assert "wall_ms_p50" in result
+    assert "wall_ms_p95" in result
+    assert "phases_ms" in result
+    assert "skip_check" in result["phases_ms"]
+    assert "parse_config" in result["phases_ms"]
+    assert result["tokens"]["method"] == "proxy"
