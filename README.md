@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Claude_Code-plugin-5A67D8" alt="Claude Code plugin">
 </p>
 
-## CLAUDE.md asks. Bully doesn't.
+## CLAUDE.md asks. Bully enforces.
 
 Bully is a lint pipeline for Claude Code. Every `Edit` / `Write` hits a `PostToolUse` hook that checks the change against `.bully.yml`. **Errors block the tool call -- Claude can't land the edit until it passes.** Warnings don't block. Any language; rules are scoped by file glob.
 
