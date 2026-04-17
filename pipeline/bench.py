@@ -571,11 +571,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="bully bench",
         description="Measure bully's speed and input-token cost.",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--config",
         help="Path to a .bully.yml; enables Mode B (config cost analysis).",
     )
-    parser.add_argument(
+    mode.add_argument(
         "--compare",
         action="store_true",
         help="Mode A only: diff the last two runs in bench/history.jsonl.",

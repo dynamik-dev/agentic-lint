@@ -540,6 +540,21 @@ def test_run_fixture_restores_trust_env_var(tmp_path, monkeypatch):
     assert "BULLY_TRUST_ALL" not in _os.environ
 
 
+def test_bench_config_and_compare_are_mutually_exclusive():
+    """--config and --compare can't be used together."""
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pipeline.pipeline", "bench",
+         "--config", "foo.yml", "--compare"],
+        capture_output=True,
+        text=True,
+    )
+    # argparse exits 2 on mutually-exclusive conflict.
+    assert result.returncode == 2
+    assert "not allowed" in result.stderr.lower() or "mutually exclusive" in result.stderr.lower()
+
+
 def test_real_fixtures_complete_successfully(tmp_path, monkeypatch):
     """All authored fixtures under bench/fixtures/ run without errors."""
     import json as _json
