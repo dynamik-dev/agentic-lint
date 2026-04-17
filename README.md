@@ -84,13 +84,13 @@ The path has to be stable so Claude Code finds the hook every time. Anywhere wor
 
 ```bash
 mkdir -p ~/.claude/skills ~/.claude/agents
-for s in agentic-lint agentic-lint-init agentic-lint-author agentic-lint-review; do
+for s in bully bully-init bully-author bully-review; do
   ln -sf ~/.agentic-lint/skills/$s ~/.claude/skills/$s
 done
-ln -sf ~/.agentic-lint/agents/agentic-lint-evaluator.md ~/.claude/agents/agentic-lint-evaluator.md
+ln -sf ~/.agentic-lint/agents/bully-evaluator.md ~/.claude/agents/bully-evaluator.md
 ```
 
-Project scope: symlink into `.claude/skills` / `.claude/agents` at your project root so the skills only activate there. To change the evaluator model, edit `model:` in `~/.agentic-lint/agents/agentic-lint-evaluator.md` (default is `sonnet`).
+Project scope: symlink into `.claude/skills` / `.claude/agents` at your project root so the skills only activate there. To change the evaluator model, edit `model:` in `~/.agentic-lint/agents/bully-evaluator.md` (default is `sonnet`).
 
 ### 3. Register the PostToolUse hook
 
@@ -126,7 +126,7 @@ python3 ~/.agentic-lint/pipeline/pipeline.py --doctor
 ### 1. Bootstrap a config
 
 ```
-> /agentic-lint-init
+> /bully-init
 ```
 
 The init skill detects your stack, scans for existing linter configs, asks a couple of questions, and writes a baseline `.agentic-lint.yml`. If a starter pack matches your stack, it wires up `extends:` for you. Review, tweak, commit.
@@ -149,7 +149,7 @@ When a rule is right in general but wrong on one line:
 eval(expr); // agentic-lint-disable: no-eval reason: sandboxed input
 ```
 
-Use sparingly. Telemetry tracks disables so noisy rules surface in `/agentic-lint-review`.
+Use sparingly. Telemetry tracks disables so noisy rules surface in `/bully-review`.
 
 ### 4. Telemetry (optional)
 
@@ -157,7 +157,7 @@ Use sparingly. Telemetry tracks disables so noisy rules surface in `/agentic-lin
 mkdir .agentic-lint
 ```
 
-One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in `.gitignore` -- per-developer data. After a few hundred edits, run `/agentic-lint-review` for noisy / dead / slow rule analysis.
+One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in `.gitignore` -- per-developer data. After a few hundred edits, run `/bully-review` for noisy / dead / slow rule analysis.
 
 ### 5. Evolve the config
 
@@ -167,7 +167,7 @@ One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in
 > apply the recommendations from the last review
 ```
 
-The `agentic-lint-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.agentic-lint.yml`.
+The `bully-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.agentic-lint.yml`.
 
 ## Manual invocation
 
@@ -186,8 +186,8 @@ python3 "$PIPE" --show-resolved-config                       # rules after exten
 ## Uninstall
 
 ```bash
-rm ~/.claude/skills/agentic-lint{,-init,-author,-review}
-rm ~/.claude/agents/agentic-lint-evaluator.md
+rm ~/.claude/skills/bully{,-init,-author,-review}
+rm ~/.claude/agents/bully-evaluator.md
 # Then remove the PostToolUse block from ~/.claude/settings.json
 rm -rf ~/.agentic-lint
 ```

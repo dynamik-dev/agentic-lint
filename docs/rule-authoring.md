@@ -2,7 +2,7 @@
 
 How to write, scope, and test rules in `.agentic-lint.yml`.
 
-This doc covers the concepts. For the interactive flow — drafting a rule from a natural-language request, testing it against fixtures, and writing to the config — use the `agentic-lint-author` skill:
+This doc covers the concepts. For the interactive flow — drafting a rule from a natural-language request, testing it against fixtures, and writing to the config — use the `bully-author` skill:
 
 ```
 > add a lint rule that bans var_dump() in PHP
@@ -288,7 +288,7 @@ Combine `--rule` with `--print-prompt` while iterating on a semantic rule's desc
   - Slow external linters (pint, phpstan) where the signal matters but blocking every edit is too costly.
   - Style preferences where a violation is not strictly wrong.
 
-Promotion pathway: start a new rule as `warning`. Run it for a few hundred edits. Check the `agentic-lint-review` report. If the violation rate is low and fixes are clean, promote to `error`. If noisy or flapping, adjust the rule or keep it a warning.
+Promotion pathway: start a new rule as `warning`. Run it for a few hundred edits. Check the `bully-review` report. If the violation rate is low and fixes are clean, promote to `error`. If noisy or flapping, adjust the rule or keep it a warning.
 
 ## Rule quality checklist
 

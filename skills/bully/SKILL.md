@@ -1,6 +1,6 @@
 ---
-name: agentic-lint
-description: Interprets agentic-lint PostToolUse hook output after Edit/Write -- fixes blocked-stderr violations or dispatches the agentic-lint-evaluator subagent for semantic payloads.
+name: bully
+description: Interprets agentic-lint PostToolUse hook output after Edit/Write -- fixes blocked-stderr violations or dispatches the bully-evaluator subagent for semantic payloads.
 metadata:
   author: dynamik-dev
   version: 2.0.0
@@ -50,13 +50,13 @@ If `evaluate` is empty, proceed with no dispatch and no inline eval.
 
 ### Dispatch vs. inline
 
-If the `diff` is short (roughly under 15 lines) AND there is only one rule in `evaluate`, judge it yourself inline against the diff and produce the same VIOLATIONS / NO_VIOLATIONS format below -- skip the subagent. Otherwise dispatch the `agentic-lint-evaluator` subagent.
+If the `diff` is short (roughly under 15 lines) AND there is only one rule in `evaluate`, judge it yourself inline against the diff and produce the same VIOLATIONS / NO_VIOLATIONS format below -- skip the subagent. Otherwise dispatch the `bully-evaluator` subagent.
 
 ### Dispatch (multi-rule or larger diffs)
 
 Parse the `additionalContext` JSON. If it contains a top-level `_evaluator_input` field, pass ONLY that field (re-serialized as JSON) as the subagent `prompt`. Otherwise fall back to the full payload. This keeps `passed_checks` out of the subagent's context while preserving it for your own use.
 
-Call the Agent tool with `subagent_type: agentic-lint-evaluator` and a 3-5 word `description` (e.g. "Evaluate lint rules"). The agent returns:
+Call the Agent tool with `subagent_type: bully-evaluator` and a 3-5 word `description` (e.g. "Evaluate lint rules"). The agent returns:
 
 ```
 VIOLATIONS:

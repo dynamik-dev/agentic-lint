@@ -20,7 +20,7 @@ In scope:
 
 Out of scope:
 - Rules themselves being poorly written (that's a config bug, not a security issue).
-- The `agentic-lint` skill making a judgment error on a semantic rule.
+- The `bully` skill making a judgment error on a semantic rule.
 - Third-party linters invoked by a rule's `script:` field.
 
 ## Supported Versions

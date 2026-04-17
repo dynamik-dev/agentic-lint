@@ -1,6 +1,6 @@
 ---
-name: agentic-lint-author
-description: Authors, modifies, or removes rules in `.agentic-lint.yml`. Use when the user says "add a lint rule for X", "ban Y", "tighten <rule-id>", "make <rule-id> a warning", "convert <rule-id> to semantic", "remove <rule-id>", "change the scope of <rule-id>", or asks to apply recommendations from `/agentic-lint-review`. Always tests a rule against a fixture before writing it to the config.
+name: bully-author
+description: Authors, modifies, or removes rules in `.agentic-lint.yml`. Use when the user says "add a lint rule for X", "ban Y", "tighten <rule-id>", "make <rule-id> a warning", "convert <rule-id> to semantic", "remove <rule-id>", "change the scope of <rule-id>", or asks to apply recommendations from `/bully-review`. Always tests a rule against a fixture before writing it to the config.
 metadata:
   author: dynamik-dev
   version: 1.0.0
@@ -12,7 +12,7 @@ metadata:
 
 Interactive authoring for `.agentic-lint.yml`. Every proposed rule is tested against a fixture before being written.
 
-If no `.agentic-lint.yml` exists, stop and tell the user to run `/agentic-lint-init` first.
+If no `.agentic-lint.yml` exists, stop and tell the user to run `/bully-init` first.
 
 See `docs/rule-authoring.md` for full field reference and the rule quality checklist.
 
@@ -23,9 +23,9 @@ See `docs/rule-authoring.md` for full field reference and the rule quality check
 - "Convert `<rule-id>` to semantic" (or vice versa)
 - "Change the scope of `<rule-id>`"
 - "Remove `<rule-id>`"
-- "Apply the `/agentic-lint-review` recommendations"
+- "Apply the `/bully-review` recommendations"
 
-Not triggered by bootstrap (`agentic-lint-init`), audit (`agentic-lint-review`), or hook-output interpretation (`agentic-lint`).
+Not triggered by bootstrap (`bully-init`), audit (`bully-review`), or hook-output interpretation (`bully`).
 
 ## Engine choice
 

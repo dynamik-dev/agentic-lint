@@ -1335,7 +1335,7 @@ def _cmd_doctor() -> int:
 
     # Evaluator subagent definition
     claude_home = Path(os.environ.get("CLAUDE_HOME", str(Path.home() / ".claude")))
-    agent_file = claude_home / "agents" / "agentic-lint-evaluator.md"
+    agent_file = claude_home / "agents" / "bully-evaluator.md"
     if agent_file.is_file():
         print(f"[OK] evaluator agent at {agent_file}")
     else:
@@ -1344,10 +1344,10 @@ def _cmd_doctor() -> int:
 
     # Skills
     for suffix in (
-        "agentic-lint",
-        "agentic-lint-init",
-        "agentic-lint-author",
-        "agentic-lint-review",
+        "bully",
+        "bully-init",
+        "bully-author",
+        "bully-review",
     ):
         skill_md = Path.home() / ".claude" / "skills" / suffix / "SKILL.md"
         if skill_md.is_file():

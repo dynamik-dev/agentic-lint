@@ -1,6 +1,6 @@
 # Telemetry and self-improvement
 
-Every pipeline run can append a record to a telemetry log. The `agentic-lint-review` skill reads that log and classifies rule health so the config can evolve with the codebase.
+Every pipeline run can append a record to a telemetry log. The `bully-review` skill reads that log and classifies rule health so the config can evolve with the codebase.
 
 ## Enabling
 
@@ -176,10 +176,10 @@ All rules:
 
 ## Using the review skill
 
-The `agentic-lint-review` skill wraps the analyzer and produces a prioritized punch list instead of a raw table:
+The `bully-review` skill wraps the analyzer and produces a prioritized punch list instead of a raw table:
 
 ```
-> /agentic-lint-review
+> /bully-review
 ```
 
 The skill runs the analyzer, interprets the findings in context, and recommends concrete actions. It never modifies `.agentic-lint.yml` without your confirmation.
@@ -188,14 +188,14 @@ The skill runs the analyzer, interprets the findings in context, and recommends 
 
 1. Add the rule to `.agentic-lint.yml` with `severity: warning`.
 2. Let it run across a few hundred edits.
-3. `/agentic-lint-review`.
+3. `/bully-review`.
 4. If the rule is noisy, sharpen its pattern or description before promoting.
 5. If the rule is quiet with clean fixes, promote to `severity: error`.
 6. If the rule never fires, check the scope glob first; if scope is right, consider removing.
 
 ## Workflow: removing a rule
 
-1. `/agentic-lint-review` identifies a dead rule.
+1. `/bully-review` identifies a dead rule.
 2. Verify the scope isn't misconfigured. (A common cause: rule scoped `src/*.ts` when the project uses `packages/*/src/*.ts`.)
 3. If the rule is genuinely unused, remove it from `.agentic-lint.yml`.
 4. The telemetry log retains history; removed rules simply stop appearing in future records.

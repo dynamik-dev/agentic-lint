@@ -1,5 +1,5 @@
 ---
-name: agentic-lint-evaluator
+name: bully-evaluator
 description: "Evaluates a single agentic-lint semantic-evaluation payload against a diff and returns a structured violation list. Invoked exclusively by the agentic-lint skill when the PostToolUse hook injects a SEMANTIC EVALUATION REQUIRED payload. Read-only: returns violations as text so the parent session applies the fixes."
 model: sonnet
 tools: Read, Grep, Glob

@@ -1,5 +1,5 @@
 ---
-name: agentic-lint-review
+name: bully-review
 description: Reviews agentic-lint rule health from the telemetry log. Use when the user says "review my lint rules", "check rule health", "which lint rules are noisy", "find dead lint rules", "agentic-lint review", or asks for an audit of `.agentic-lint.yml`. Surfaces noisy, dead, and slow rules and suggests which to adjust, remove, or promote.
 metadata:
   author: dynamik-dev
@@ -62,4 +62,4 @@ Follow with brief noisy / dead / slow sections. Do not dump `by_rule` unless ask
 
 ## Step 5: Hand off
 
-Do not edit `.agentic-lint.yml` directly. When the user confirms a recommendation, hand off to the `agentic-lint-author` skill to apply it -- that skill tests rules against fixtures before writing.
+Do not edit `.agentic-lint.yml` directly. When the user confirms a recommendation, hand off to the `bully-author` skill to apply it -- that skill tests rules against fixtures before writing.

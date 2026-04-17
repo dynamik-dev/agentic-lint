@@ -311,11 +311,11 @@ Each record:
 }
 ```
 
-The `agentic-lint-review` skill runs `analyzer.py` over this log and classifies each rule as **noisy** (violation rate above threshold), **dead** (never fired in the window), or **slow** (mean latency above threshold). See [telemetry.md](telemetry.md).
+The `bully-review` skill runs `analyzer.py` over this log and classifies each rule as **noisy** (violation rate above threshold), **dead** (never fired in the window), or **slow** (mean latency above threshold). See [telemetry.md](telemetry.md).
 
 ## Stack detection and baseline generation
 
-The `agentic-lint-init` skill bootstraps the project config. Run once.
+The `bully-init` skill bootstraps the project config. Run once.
 
 ### Detection
 
@@ -339,7 +339,7 @@ Agent-native by default: grep/awk primitives and semantic rules. External linter
 
 `.agentic-lint.yml` is the primary config. CLAUDE.md is a secondary rule source during init.
 
-- **Init-time migration, not runtime parsing.** The `agentic-lint-init` skill reads CLAUDE.md once during bootstrap, extracts structured style rules, and migrates them into `.agentic-lint.yml`. At runtime, the pipeline reads only the YAML.
+- **Init-time migration, not runtime parsing.** The `bully-init` skill reads CLAUDE.md once during bootstrap, extracts structured style rules, and migrates them into `.agentic-lint.yml`. At runtime, the pipeline reads only the YAML.
 - **Deduplication at init time.** The init skill compares migrated CLAUDE.md rules against rules it generated from other sources and deduplicates before writing the YAML.
 - **CLAUDE.md stays readable.** The init skill does not strip rules from CLAUDE.md. Those rules still serve as human-readable documentation; they stop being the enforcement mechanism.
 - **No magic parsing.** The init skill looks for structured sections (bulleted lists under headings like "Style Rules", "Conventions", "Coding Standards") and treats each bullet as a candidate rule. Unstructured prose is ignored.
@@ -362,7 +362,7 @@ For a different stack (Next.js, Rust CLI, Django), the same pipeline with differ
 
 Four skills cover the lifecycle:
 
-- **`agentic-lint-init`** — bootstraps `.agentic-lint.yml` once per project (zero → something).
+- **`bully-init`** — bootstraps `.agentic-lint.yml` once per project (zero → something).
 - **`agentic-lint`** — interprets hook output (blocked text or semantic evaluation payload) during every Edit/Write cycle. Not user-invocable.
-- **`agentic-lint-author`** — adds, modifies, or removes rules. Tests every rule against a fixture before writing to the config. User-invocable.
-- **`agentic-lint-review`** — audits rule health from the telemetry log and hands concrete recommendations off to the author skill. User-invocable.
+- **`bully-author`** — adds, modifies, or removes rules. Tests every rule against a fixture before writing to the config. User-invocable.
+- **`bully-review`** — audits rule health from the telemetry log and hands concrete recommendations off to the author skill. User-invocable.

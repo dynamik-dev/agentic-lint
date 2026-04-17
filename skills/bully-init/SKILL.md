@@ -1,5 +1,5 @@
 ---
-name: agentic-lint-init
+name: bully-init
 description: Bootstraps a project's .agentic-lint.yml by detecting the tech stack from manifest files, migrating rules from existing linting tools, and generating a baseline config. Use when user says "init agentic lint", "set up agentic lint", "bootstrap lint config", "create lint rules", "agentic-lint init", "initialize agentic lint", or asks to create or generate an agentic lint configuration.
 metadata:
   author: dynamik-dev
@@ -84,7 +84,7 @@ Overrides: <count>
 Excluded globs: <list>
 ```
 
-Tell the user: "To add project-specific rules, use `/agentic-lint-author`. To audit rule health later, use `/agentic-lint-review`."
+Tell the user: "To add project-specific rules, use `/bully-author`. To audit rule health later, use `/bully-review`."
 
 ## Troubleshooting
 

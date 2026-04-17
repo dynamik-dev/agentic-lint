@@ -48,16 +48,16 @@ def test_doctor_all_pass(tmp_path):
     home.mkdir()
     skills = home / ".claude" / "skills"
     for suffix in (
-        "agentic-lint",
-        "agentic-lint-init",
-        "agentic-lint-author",
-        "agentic-lint-review",
+        "bully",
+        "bully-init",
+        "bully-author",
+        "bully-review",
     ):
         (skills / suffix).mkdir(parents=True)
         (skills / suffix / "SKILL.md").write_text("# skill\n")
     agents = home / ".claude" / "agents"
     agents.mkdir(parents=True)
-    (agents / "agentic-lint-evaluator.md").write_text("# eval\n")
+    (agents / "bully-evaluator.md").write_text("# eval\n")
 
     r = _run_doctor(
         project,
@@ -72,7 +72,7 @@ def test_doctor_all_pass(tmp_path):
     assert "[OK] config parses" in r.stdout
     assert "[OK] PostToolUse hook wired" in r.stdout
     assert "[OK] evaluator agent" in r.stdout
-    assert "[OK] skill agentic-lint present" in r.stdout
+    assert "[OK] skill bully present" in r.stdout
 
 
 def test_doctor_missing_config_fails(tmp_path):
