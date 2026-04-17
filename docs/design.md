@@ -67,11 +67,106 @@ rules:
     severity: error
 ```
 
+### Optional fields
+
+- `fix_hint` — script rules only. A one-line suggestion (e.g. `"replace compact() with an explicit array"`) that the pipeline attaches to each emitted `Violation` as `suggestion`. The `agentic-lint` skill surfaces it verbatim. Keep it short and mechanical; anything that needs judgment belongs in the `description` of a semantic rule.
+
 ### Design decisions
 
-- **No `fix` field.** The agent figures out the fix from the violation description. Prescribed fixes couple the rule to a specific transformation and become brittle.
+- **No prescribed transformations.** `fix_hint` is a one-liner, not a codemod. The agent still performs the edit — prescribed transformations couple the rule to specific syntax and rot fast.
 - **No rule dependencies or ordering.** Rules are independent. If two rules interact, the LLM sees both via the `passed_checks` context.
 - **No `language` field.** Scope globs handle targeting.
+
+## Validation
+
+`.agentic-lint.yml` is parsed by a hardened reader in `pipeline/pipeline.py:parse_config`. It stays stdlib-only — no PyYAML — but every failure is loud.
+
+Checks performed on load:
+
+- **Unknown keys** at the config root or inside a rule raise a line-numbered error. A typo like `sevrity:` no longer silently skips the rule.
+- **Type-checked fields.** `engine` must be `script` or `semantic`; `severity` must be `error` or `warning`; `scope` must be a string or a list of strings; `script` must be a string.
+- **Duplicate rule ids** across the config (or after `extends:` merge) are rejected.
+- **Tab characters** in indentation are rejected with the offending line number — the dialect is spaces-only and tabs are the single most common silent-drop cause.
+- **Required fields** (`description`, `engine`, `scope`, `severity`, and `script` on script rules) are enforced per rule with the rule id and line number in the error.
+
+Run the checks without firing the hook:
+
+```bash
+python3 pipeline/pipeline.py --validate
+```
+
+Exits 0 on a clean config, 1 with a human-readable report otherwise. `hook.sh` runs `--validate` once per session (keyed off a tmpdir marker) so malformed configs surface on the first edit instead of silently dropping a rule forever.
+
+The stdlib-only invariant holds: the parser is stricter, not heavier.
+
+## Extends
+
+A config can inherit rules from other packs:
+
+```yaml
+extends:
+  - "@agentic-lint/react-ts"
+  - "./packs/custom.yml"
+rules:
+  no-console-log:
+    severity: warning   # locally override the inherited error
+```
+
+Resolution rules (`pipeline/pipeline.py:resolve_extends`):
+
+- `@agentic-lint/<name>` resolves to `examples/packs/<name>.yml` inside the agentic-lint install.
+- `./path` or `../path` resolves relative to the config file containing the `extends:` entry.
+- Absolute paths are accepted and used as-is.
+- Each referenced file is parsed with the same validator.
+
+Merge order: **local wins**. Rules are merged left-to-right through `extends:`, then the local `rules:` block overrides any inherited rule with the same id. Merging is per-rule, not per-field — redefining `no-console-log` locally replaces the whole rule, it does not patch its `severity` onto the inherited body.
+
+Cycles are detected: if `a.yml` extends `b.yml` which extends `a.yml`, the parser errors with the full chain rather than recursing forever.
+
+## Baseline and disables
+
+Adopting agentic-lint on a codebase with pre-existing violations is handled two ways.
+
+### Baseline file
+
+`.agentic-lint/baseline.json` records known-at-adoption violations that should not block edits:
+
+```json
+{
+  "generated_at": "2026-04-16T18:00:00Z",
+  "entries": [
+    {"rule": "no-console-log", "file": "src/legacy/Debug.tsx", "line": 42, "checksum": "a1b2c3"}
+  ]
+}
+```
+
+`checksum` is a short hash of the offending line's content. On every run, `pipeline.py` filters matching violations before deciding `blocked` vs `evaluate`. An entry drops off the baseline the moment the file stops producing that violation with that checksum — when the code is fixed, the suppression goes with it.
+
+Generate and refresh with `agentic-lint baseline init` (run once at adoption) or by hand. The file lives under `.agentic-lint/` so it shares the telemetry opt-in shape: no directory, no baseline.
+
+### Per-line disables
+
+For one-off suppressions, a directive comment on the offending line opts that line out of a specific rule:
+
+```python
+password = config.get("secret")  # agentic-lint-disable: no-hardcoded-secret not a secret, just the key name
+```
+
+The syntax is `# agentic-lint-disable: <rule-id> <reason>`. Parser is comment-prefix-agnostic — `//`, `#`, `--`, `;` all work. Multiple rule ids can be comma-separated. The reason is required (short human text) so suppressions carry their own justification; `pipeline.py:parse_disable_directive` rejects disables without one.
+
+Directives are scoped to the line they appear on. There is no file-level or block-level form — deliberate; line-scoped disables do not silently widen.
+
+## Short-circuit
+
+Before any rule loads, the pipeline skips auto-generated files outright. The list lives in `pipeline/pipeline.py:AUTO_GENERATED_PATTERNS`:
+
+```
+package-lock.json, yarn.lock, pnpm-lock.yaml, poetry.lock, Cargo.lock,
+composer.lock, Gemfile.lock, go.sum, *.min.*, *.generated.*,
+dist/**, build/**, __pycache__/**, node_modules/**, vendor/**
+```
+
+Matches return `pass` before config parse, scope match, or script dispatch. No config flag, no override — lockfiles and build artifacts never benefit from lint and firing on them burns cycles on every edit.
 
 ## Evaluation pipeline
 
@@ -124,7 +219,7 @@ The pipeline synthesizes the pre-edit file state so it can emit a unified diff w
 
 - **Edit**: reads the current file, replaces `new_string` with `old_string` (first occurrence) to reconstruct the before state, then `difflib.unified_diff(...)` with five lines of context. Line numbers in the diff are real, so the agent can cite them in violations.
 - **Write**: emits the full file content with each line prefixed `NNNN:`. Line numbers remain usable for citing violations.
-- **Fallback**: if `new_string` cannot be found in the file (e.g. a subsequent edit already replaced it), the pipeline emits a best-effort synthetic diff of the strings alone.
+- **Fallback**: if `new_string` cannot be found in the file (e.g. a subsequent edit already replaced it), the pipeline emits a best-effort synthetic diff of the strings alone. The diff is prefixed with a `WARNING: could not anchor to file on disk, line numbers are synthetic` line and the surrounding payload carries `"line_anchors": "synthetic"`. The `agentic-lint` skill reads that flag and refuses to cite line numbers it cannot trust; the fallback also emits a `diff_anchor_fallback` record to telemetry so the case is visible in the analyzer.
 
 ### Script output adapters
 
@@ -148,7 +243,9 @@ Unrecognized output is never dropped silently.
 
 Claude Code treats `exit 2` on a `PostToolUse` hook as a blocking signal and surfaces stderr to the agent.
 
-### Short-circuit behavior
+### In-pipeline short-circuits
+
+On top of the auto-generated-file skip (see [Short-circuit](#short-circuit) above), the pipeline bails out early in three cases:
 
 - No matching rules for the file: pipeline returns `pass` immediately.
 - Script phase finds error-severity violations: phase 2 is skipped (fix the obvious stuff first).

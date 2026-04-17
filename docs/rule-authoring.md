@@ -88,6 +88,24 @@ pint-formatting:
 
 Slow shell-outs block the edit loop. Use `severity: warning` unless you are certain the tool runs quickly enough to run on every edit.
 
+### Optional: `fix_hint`
+
+Add a `fix_hint` to any script rule to give the agent a one-line mechanical suggestion:
+
+```yaml
+no-compact:
+  description: "Do not use compact() -- use explicit arrays"
+  engine: script
+  scope: "*.php"
+  severity: error
+  script: "grep -n 'compact(' {file} && exit 1 || exit 0"
+  fix_hint: "replace compact('foo', 'bar') with ['foo' => $foo, 'bar' => $bar]"
+```
+
+The pipeline passes the string through unchanged as `suggestion` on every `Violation` the rule produces. The `agentic-lint` skill already renders `suggestion`, so the hint shows up next to the violation text with no other plumbing.
+
+Keep hints short, mechanical, and universally applicable to the rule — anything that depends on surrounding code belongs in a semantic rule's `description` instead. There is no placeholder syntax; the hint is static text per rule.
+
 ## Semantic rule skeleton
 
 ```yaml
@@ -163,6 +181,78 @@ Script rules may print violations in several formats. The pipeline's adapter rec
 6. **Anything else** — the raw output becomes the violation description (truncated to 500 chars). No output is dropped silently.
 
 Prefer formats that include a line number. Violations with line numbers are more actionable for the agent.
+
+## Extending a pack
+
+Instead of hand-copying starter rules, pull them in with `extends:`. Starter packs live under `examples/packs/` — `react-ts.yml`, `nextjs.yml`, `django.yml`, `fastapi.yml`, `go.yml`, `rails.yml`, `rust-cli.yml`.
+
+```yaml
+schema_version: 1
+extends:
+  - "@agentic-lint/react-ts"
+  - "./packs/team-overrides.yml"
+
+rules:
+  # override an inherited rule by redefining it locally
+  no-console-log:
+    description: "No console.log in production code."
+    engine: script
+    scope: ["src/**/*.ts", "src/**/*.tsx"]
+    severity: warning   # was error upstream
+    script: "grep -nE 'console\\.log\\(' {file} && exit 1 || exit 0"
+```
+
+Resolution:
+
+- `@agentic-lint/<name>` picks up `examples/packs/<name>.yml` from the agentic-lint install.
+- `./path` and `../path` resolve relative to the config file.
+- Local `rules:` override inherited rules by id (whole-rule replacement — fields are not merged).
+
+Cycles and unknown references fail loud at parse time. See [design.md#extends](design.md#extends) for the full semantics.
+
+## Validating a rule
+
+Before committing a rule, run the validator:
+
+```bash
+python3 pipeline/pipeline.py --validate
+```
+
+It parses `.agentic-lint.yml` (plus anything it extends) with the same hardened reader the hook uses. The validator reports:
+
+- Unknown keys with the line number where they appeared.
+- Wrong types (`severity: "fatal"`, `scope: 42`, etc.).
+- Duplicate rule ids across the extends chain.
+- Tab-indented lines.
+- Missing required fields (script rules without `script:`, any rule without `scope:`).
+- Unresolvable `extends:` targets and cycles.
+
+Exit code 0 means clean. Exit code 1 prints a report and a non-zero count. Wire it into CI to catch config drift before a hook run does.
+
+`hook.sh` calls `--validate` once per session, so a malformed config surfaces on the first edit rather than silently dropping rules across hundreds of edits.
+
+## Disabling per line
+
+For one-off suppressions — a known-safe pattern the rule can't see around — add a directive comment on the offending line:
+
+```python
+token = os.environ["TEST_TOKEN"]  # agentic-lint-disable: no-hardcoded-secret env lookup, not a literal
+```
+
+```typescript
+const debug = (...args: unknown[]) => console.log(...args); // agentic-lint-disable: no-console-log dev-only helper
+```
+
+Rules:
+
+- Syntax: `<comment-prefix> agentic-lint-disable: <rule-id>[,<rule-id>...] <reason>`.
+- Any comment prefix works: `#`, `//`, `--`, `;`.
+- Reason is required. No reason, no suppression.
+- Scoped to the single line the directive appears on. There is no block or file-level form.
+
+The directive is enforced by `pipeline/pipeline.py:parse_disable_directive`. Misspelled rule ids or missing reasons are surfaced as warnings in the hook output so dead directives don't accumulate.
+
+Prefer baselining existing codebases via `.agentic-lint/baseline.json` (see [design.md#baseline-and-disables](design.md#baseline-and-disables)); reserve per-line disables for genuine exceptions.
 
 ## Testing a rule
 

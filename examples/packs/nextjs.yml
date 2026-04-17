@@ -1,0 +1,84 @@
+# Next.js starter rule pack
+#
+# Stack: Next.js (Pages Router or App Router) projects in TypeScript
+# or JavaScript. Pair with the `react-ts` pack for broader React rules.
+#
+# How to use:
+#   - Copy these rules into your project's `.agentic-lint.yml` under
+#     the `rules:` key, or
+#   - Once the extends mechanism ships (see docs/plan.md section 3.2):
+#
+#       extends: ["@agentic-lint/nextjs"]
+#
+# These are starting points. Tighten `scope` to your actual source
+# layout (`app/**/*.tsx`, `pages/**/*.tsx`, `components/**/*.tsx`) and
+# flip severities to match your team's tolerance.
+
+rules:
+  no-html-anchor-for-internal-routes:
+    description: >
+      Do not use a plain `<a href="/...">` for routes inside this
+      Next.js app. Use `next/link` so the router can prefetch, preserve
+      scroll, and avoid a full page reload. Plain anchors are fine for
+      external URLs and for `mailto:` / `tel:` links.
+    engine: semantic
+    scope: ["*.tsx", "*.jsx"]
+    severity: error
+
+  no-img-tag-over-next-image:
+    description: >
+      Do not use a raw `<img>` tag for application images. Use
+      `next/image` so Next can serve responsive, optimized, lazy-loaded
+      images with correct `width`/`height` to prevent layout shift.
+      Raw `<img>` is acceptable only for SVG sprites or data URIs.
+    engine: script
+    scope: ["*.tsx", "*.jsx"]
+    severity: warning
+    script: "grep -nE '<img[[:space:]>]' {file} && exit 1 || exit 0"
+
+  no-getInitialProps:
+    description: >
+      `getInitialProps` disables automatic static optimization and runs
+      on every request. Use `getServerSideProps`, `getStaticProps`, or
+      (App Router) a server component / route handler instead.
+    engine: script
+    scope: ["*.tsx", "*.ts", "*.jsx", "*.js"]
+    severity: error
+    script: "grep -nE '\\bgetInitialProps\\b' {file} && exit 1 || exit 0"
+
+  proper-data-fetching-choice:
+    description: >
+      Pick the right data-fetching strategy. Static data that rarely
+      changes belongs in `getStaticProps` / `generateStaticParams`.
+      Per-request data belongs in `getServerSideProps` or a server
+      component. User-specific data from a browser action belongs on
+      the client (React Query / SWR). Do not reach for SSR when SSG
+      would do, and do not fetch in `useEffect` when a server component
+      is available.
+    engine: semantic
+    scope: ["*.tsx", "*.ts"]
+    severity: warning
+
+  no-env-vars-without-next-public-prefix:
+    description: >
+      Client-bundled files must only read environment variables whose
+      names begin with `NEXT_PUBLIC_`. Any other `process.env.FOO`
+      reference in a client component or `pages/` page body will be
+      `undefined` in the browser and leak intent about a server-only
+      secret. Move server-only reads into `getServerSideProps`, a route
+      handler, or a server component.
+    engine: semantic
+    scope: ["*.tsx", "*.jsx"]
+    severity: error
+
+  no-secrets-in-client-bundles:
+    description: >
+      Do not import server-only modules (database clients, secret
+      managers, private SDKs) or reference secret-shaped env vars
+      (API_KEY, SECRET, TOKEN, PRIVATE_KEY) from files that ship to the
+      browser. In the App Router, mark server-only files with
+      `import "server-only"`. In Pages Router, keep those imports
+      behind `getServerSideProps` / API routes.
+    engine: semantic
+    scope: ["*.tsx", "*.ts", "*.jsx", "*.js"]
+    severity: error

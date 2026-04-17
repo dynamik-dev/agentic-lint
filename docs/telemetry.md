@@ -77,9 +77,57 @@ Per-rule:
 
 - **`pass`** — script rule ran and returned exit 0.
 - **`violation`** — script rule ran and returned non-zero.
-- **`evaluate_requested`** — semantic rule was included in the payload sent to the agent. The pipeline does not see the agent's eventual verdict; the telemetry captures only that judgment was requested.
+- **`evaluate_requested`** — semantic rule was included in the payload sent to the agent. Paired later by a `semantic_verdict` record once the skill reports back.
 
-The asymmetry for semantic rules is a known limitation. Future work: an agent-side callback that records the judgment outcome so semantic rules can be classified as noisy/dead with the same precision as script rules.
+## Semantic verdicts and skips
+
+The pipeline ships two extra record types that close the semantic-rule telemetry loop.
+
+### `semantic_verdict`
+
+After the `agentic-lint` skill finishes evaluating a semantic payload, it calls:
+
+```bash
+python3 pipeline/pipeline.py --log-verdict \
+  --rule inline-single-use-vars \
+  --file src/Evaluators/CachedEvaluator.php \
+  --verdict violation
+```
+
+which appends a record like:
+
+```json
+{
+  "ts": "2026-04-16T18:00:05Z",
+  "type": "semantic_verdict",
+  "file": "src/Evaluators/CachedEvaluator.php",
+  "rule": "inline-single-use-vars",
+  "verdict": "violation",
+  "severity": "error"
+}
+```
+
+`verdict` is `pass` or `violation`. The record is keyed by rule id and file, which is enough for the analyzer to pair it with the earlier `evaluate_requested` line.
+
+### `semantic_skipped`
+
+Before dispatching the evaluator the pipeline applies cheap "can't possibly match" filters (whitespace-only hunks, pure deletions, comment-only hunks on identifier-targeting rules, <2 added lines). When a filter preempts a dispatch, the pipeline writes:
+
+```json
+{
+  "ts": "2026-04-16T18:00:00Z",
+  "type": "semantic_skipped",
+  "file": "src/Foo.php",
+  "rule": "inline-single-use-vars",
+  "reason": "whitespace_only"
+}
+```
+
+`reason` is one of `whitespace_only`, `deletion_only`, `comment_only`, `insufficient_added_lines`. These records make the skip lane visible so a skip pattern that hides real violations shows up in the analyzer instead of vanishing.
+
+### Note on skill version
+
+`semantic_verdict` depends on the `agentic-lint` skill being up to date — older versions do not call `--log-verdict`. If verdict records are missing for known-firing semantic rules, update the skill or bypass the evaluator manually (`pipeline.py --log-verdict` is a plain CLI). `semantic_skipped` is pipeline-side and independent of the skill.
 
 ## Running the analyzer
 
@@ -122,8 +170,8 @@ All rules:
 
 ### Classification rules
 
-- **Noisy** — `violation_rate = fires / (fires + passes)` exceeds the noisy threshold. Defaults to 50%. A rule that fires on most edits is either too broad or flagging systemic problems — either way it warrants attention.
-- **Dead** — the rule is configured but never appeared in any log entry's `rules` list. Either the scope glob is misconfigured, or the rule is obsolete.
+- **Noisy** — `violation_rate = fires / (fires + passes)` exceeds the noisy threshold. Defaults to 50%. Semantic `violation` verdicts count as fires alongside script violations, so a prose-style rule that flags every edit surfaces as noisy now rather than hiding behind `evaluate_requested`.
+- **Dead** — the rule is configured but never appeared in any log entry's `rules` list AND has no `semantic_verdict` records and no `semantic_skipped` records for this rule id. A semantic rule that was dispatched and came back `pass` still counts as alive. A rule that is skipped only by the can't-match filters counts as alive too — the dead classifier only flags rules that never get considered.
 - **Slow** — mean per-run latency exceeds the slow threshold. Defaults to 500 ms. Usually external shell-outs. Candidates for demotion from the per-edit pipeline to pre-commit or CI.
 
 ## Using the review skill
@@ -161,10 +209,9 @@ The skill runs the analyzer, interprets the findings in context, and recommends 
 
 ## What telemetry does not do (yet)
 
-The substrate is in place; the autonomous improvements are not:
+The substrate is in place; some autonomous improvements are still deferred:
 
-- **Semantic verdict capture** — the pipeline logs that the LLM was asked; it doesn't yet log what the LLM decided. That requires an agent-side callback.
-- **Semantic-to-script promotion** — once the pipeline knows a semantic rule fires with identical mechanical fixes N times in a row, it could draft the equivalent script rule. Not wired.
+- **Semantic-to-script promotion** — once the pipeline knows a semantic rule fires with identical mechanical fixes N times in a row, it could draft the equivalent script rule. Not wired. (The inputs — paired `evaluate_requested` + `semantic_verdict` records — now exist.)
 - **Rule discovery from unflagged fixes** — when the agent edits the same pattern repeatedly without any rule firing, that could suggest a new rule. Not wired.
 
 These are the logical next features if the substrate proves useful. Deferred deliberately — they need real usage data to be meaningful rather than speculative.

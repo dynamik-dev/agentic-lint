@@ -1,0 +1,78 @@
+# Rust CLI rule pack for agentic-lint.
+#
+# Framework: Rust binary crates built on clap/structopt plus a small set
+# of library modules under `src/`. Also useful for the lib half of a
+# hybrid crate.
+# Usage: copy or reference in `.agentic-lint.yml`. These rules nudge CLI
+# projects toward the same error-handling and boundary discipline that
+# crates like `ripgrep`, `bat`, and `cargo` follow. They are starting
+# points -- adjust severities and scopes to your codebase, and rely on
+# `cargo clippy` for the deeper analytical work.
+
+rules:
+  no-unwrap-in-library:
+    description: >
+      `.unwrap()` panics on failure and is acceptable only in examples,
+      tests, and the top of `main.rs`. In library code it becomes a
+      production crash. This check flags any `.unwrap()` under `src/` --
+      exclude test files and explicit `main.rs`/`bin/*` per project if
+      the false positives get noisy.
+    engine: script
+    scope: ["src/**/*.rs"]
+    severity: warning
+    script: "grep -nE '\\.unwrap\\(\\)' {file} && exit 1 || exit 0"
+
+  no-expect-with-empty-message:
+    description: >
+      `.expect(\"\")` is strictly worse than `.unwrap()`: it pretends to
+      document intent but provides no context when the panic fires. Every
+      `.expect(...)` call should name the invariant that is being asserted,
+      e.g. `.expect(\"config path set during init\")`.
+    engine: script
+    scope: ["*.rs"]
+    severity: error
+    script: "grep -nE '\\.expect\\(\"[[:space:]]*\"\\)' {file} && exit 1 || exit 0"
+
+  prefer-anyhow-for-app-errors:
+    description: >
+      In binary (application) crates, prefer `anyhow::Result` and the `?`
+      operator over hand-rolled error enums unless callers need to branch
+      on specific error kinds. Application code rarely needs programmatic
+      error matching; it needs good error messages with context. Reserve
+      `thiserror`-style enums for library crates where callers do match.
+    engine: semantic
+    scope: ["src/main.rs", "src/bin/*.rs", "src/**/*.rs"]
+    severity: warning
+
+  clippy-lints-aligned:
+    description: >
+      Suggested rules and style choices should align with the project's
+      enabled clippy lint set. If the crate denies `clippy::pedantic` or
+      `clippy::unwrap_used`, recommendations must respect those denials
+      rather than contradicting them. When in doubt, read the crate root
+      for `#![warn(...)]` and `#![deny(...)]` attributes first.
+    engine: semantic
+    scope: ["*.rs"]
+    severity: warning
+
+  no-panic-in-cli-arg-parsing:
+    description: >
+      CLI argument parsing must never panic on bad user input. Use clap's
+      `Result`-returning parsers (e.g. `try_parse`) or structopt's error
+      variants and print a friendly error to stderr with a non-zero exit
+      code. Bad flags are a user mistake, not a programmer bug, and the
+      program should say so in English rather than unwinding the stack.
+    engine: semantic
+    scope: ["src/main.rs", "src/bin/*.rs"]
+    severity: error
+
+  no-file-io-in-library-layer:
+    description: >
+      Library modules (non-`main`, non-`bin`) should accept `impl Read`,
+      `impl Write`, or already-loaded data rather than opening files
+      themselves. Pushing path handling to the CLI boundary keeps the
+      library testable (no tempdirs), composable (stdin/stdout work for
+      free), and free of accidental filesystem coupling.
+    engine: semantic
+    scope: ["src/**/*.rs"]
+    severity: warning

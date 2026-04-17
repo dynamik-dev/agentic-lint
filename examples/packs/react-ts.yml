@@ -1,0 +1,87 @@
+# React + TypeScript starter rule pack
+#
+# Stack: React (any version) projects written in TypeScript (.ts / .tsx).
+#
+# How to use:
+#   - Copy these rules into your project's `.agentic-lint.yml` under
+#     the `rules:` key, or
+#   - Once the extends mechanism ships (see docs/plan.md section 3.2),
+#     reference this pack directly:
+#
+#       extends: ["@agentic-lint/react-ts"]
+#
+# These rules are starting points. Tune `severity` (error vs warning)
+# and `scope` globs to match how strict your team wants to be and where
+# your source lives (e.g. narrow to `src/**/*.tsx`).
+
+rules:
+  no-console-log:
+    description: >
+      Do not leave `console.log` calls in committed code. Use a proper
+      logger (or remove the statement). `console.warn` and `console.error`
+      are allowed because they signal real problems.
+    engine: script
+    scope: ["*.ts", "*.tsx"]
+    severity: error
+    script: "grep -nE '(^|[^a-zA-Z_.])console\\.log\\(' {file} && exit 1 || exit 0"
+
+  no-any-cast:
+    description: >
+      Do not use `as any` casts. They silence the type checker and hide
+      real bugs. Use a precise type, `unknown` plus a narrowing check,
+      or a generic if the value is genuinely polymorphic.
+    engine: script
+    scope: ["*.ts", "*.tsx"]
+    severity: error
+    script: "grep -nE '\\bas[[:space:]]+any\\b' {file} && exit 1 || exit 0"
+
+  no-ts-ignore:
+    description: >
+      Do not use `@ts-ignore`. Prefer `@ts-expect-error` with a short
+      comment so the suppression fails loudly once the underlying issue
+      is fixed. Fix the type error instead when possible.
+    engine: script
+    scope: ["*.ts", "*.tsx"]
+    severity: error
+    script: "grep -nE '@ts-ignore' {file} && exit 1 || exit 0"
+
+  prefer-derived-state:
+    description: >
+      If a piece of state can be computed from existing props or state
+      on every render, derive it inline (or with `useMemo` when expensive)
+      instead of storing it in `useState` and syncing it with `useEffect`.
+      Redundant state is the single largest source of React bugs.
+    engine: semantic
+    scope: ["*.tsx", "*.ts"]
+    severity: error
+
+  no-effect-for-fetching:
+    description: >
+      Do not write ad-hoc `useEffect(() => { fetch(...) })` blocks for
+      data fetching in new code. Use a data-fetching library (React
+      Query, SWR, RTK Query) or a framework loader. Manual effects leak
+      race conditions, miss cancellation, and duplicate cache logic.
+    engine: semantic
+    scope: ["*.tsx", "*.ts"]
+    severity: warning
+
+  proper-dependency-arrays:
+    description: >
+      Every value from component scope that is used inside `useEffect`,
+      `useMemo`, or `useCallback` must appear in the dependency array.
+      Omitting a dep to "avoid re-runs" hides stale-closure bugs --
+      fix the underlying cause (memoize the value, move it into a ref)
+      instead of lying to the linter.
+    engine: semantic
+    scope: ["*.tsx", "*.ts"]
+    severity: error
+
+  no-index-as-key:
+    description: >
+      Do not use the array index as the `key` prop when rendering lists
+      whose contents can reorder, insert, or delete. Use a stable
+      identifier from the item itself. Index keys are acceptable only
+      for append-only, render-once lists.
+    engine: semantic
+    scope: ["*.tsx"]
+    severity: warning

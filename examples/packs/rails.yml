@@ -1,0 +1,78 @@
+# Rails rule pack for agentic-lint.
+#
+# Framework: Ruby on Rails (7.x+, but most rules apply back to 5.x).
+# Usage: drop into your app's `.agentic-lint.yml` or merge selectively.
+# These rules encode common Rails production lessons -- raw SQL traps,
+# controller discipline, and callback sprawl. They are starting points;
+# tune scopes (e.g. `app/models/*.rb` vs. `*.rb`) to your project layout.
+#
+# Most of the interesting Rails pitfalls live at the semantic level
+# because they depend on intent (is this a controller action? a scope?
+# an after_save?). Pair these with RuboCop for style and Brakeman for
+# security -- they are complementary, not redundant.
+
+rules:
+  no-raw-sql-without-sanitize:
+    description: >
+      `Model.where(\"name = '#{params[:name]}'\")` is a SQL injection. Use
+      the hash form (`where(name: ...)`) or parameterized placeholders
+      (`where(\"name = ?\", params[:name])`). This check flags any
+      `.where(\"...\")` that contains `#{` interpolation inside the string.
+    engine: script
+    scope: ["*.rb"]
+    severity: error
+    script: "grep -nE '\\.where\\(\"[^\"]*#\\{' {file} && exit 1 || exit 0"
+
+  no-before-filter-with-conditional:
+    description: >
+      A `before_action :foo, if: :complex?, unless: :other?` hides control
+      flow in the callback chain. If the hook needs conditions, move the
+      guard into the method itself (early return) and apply the callback
+      unconditionally, or split the callback into two methods with clear
+      names. Hooks should be predicates, not mini-state-machines.
+    engine: semantic
+    scope: ["app/controllers/*.rb", "app/controllers/**/*.rb"]
+    severity: warning
+
+  strong-params-everywhere:
+    description: >
+      Controller `create` and `update` actions must route attributes
+      through a strong-parameters method (`params.require(:x).permit(...)`)
+      rather than passing `params` directly to the model. Permitting all
+      attributes, or bypassing strong params, opens the door to mass
+      assignment vulnerabilities.
+    engine: semantic
+    scope: ["app/controllers/*.rb", "app/controllers/**/*.rb"]
+    severity: error
+
+  no-find-or-create-by-without-lock:
+    description: >
+      `find_or_create_by` is a race condition: two concurrent requests can
+      both miss the find and both try to create, and only a uniqueness
+      constraint will save you. Wrap in a transaction with an advisory or
+      row lock, or rely on a unique index and rescue
+      `ActiveRecord::RecordNotUnique`.
+    engine: semantic
+    scope: ["*.rb"]
+    severity: error
+
+  rails-model-callbacks-minimal:
+    description: >
+      Chains of `after_save`, `after_commit`, and `after_update` are a
+      debugging nightmare: ordering is implicit, failures cross-contaminate,
+      and tests pass in isolation but fail in combination. Prefer an
+      explicit service object that orchestrates the save and the follow-up
+      work in a single place.
+    engine: semantic
+    scope: ["app/models/*.rb", "app/models/**/*.rb"]
+    severity: warning
+
+  no-scope-with-block-capturing-variable:
+    description: >
+      Class-level `scope :foo, -> { where(bar: SOME_VAR) }` that closes
+      over a mutable constant or global freezes the value at class load
+      time. Future changes to the variable are invisible to the scope.
+      Use a class method so the expression is evaluated on every call.
+    engine: semantic
+    scope: ["app/models/*.rb", "app/models/**/*.rb"]
+    severity: warning

@@ -1,0 +1,82 @@
+# Django starter rule pack
+#
+# Stack: Django projects (any recent version). Targets Python source
+# files; tighten `scope` to your apps directory (`apps/**/*.py`) to
+# avoid scanning migrations or third-party code.
+#
+# How to use:
+#   - Copy these rules into your project's `.agentic-lint.yml` under
+#     the `rules:` key, or
+#   - Once the extends mechanism ships (see docs/plan.md section 3.2):
+#
+#       extends: ["@agentic-lint/django"]
+#
+# These are starting points. Adjust `severity` and `scope` to match
+# your codebase conventions -- for instance, you may want to exclude
+# `migrations/` and generated admin code.
+
+rules:
+  no-bare-filter-get:
+    description: >
+      `Model.objects.filter(...).get(...)` or `.filter(...).first()`
+      to fetch a single row is an anti-pattern. Use `.get()` directly
+      (and handle `DoesNotExist`) or `get_object_or_404`. The filter+get
+      form runs two queries and hides intent.
+    engine: script
+    scope: ["*.py"]
+    severity: warning
+    script: "grep -nE '\\.filter\\([^)]*\\)\\.(get|first)\\(' {file} && exit 1 || exit 0"
+
+  no-raw-sql-without-params:
+    description: >
+      Calls to `.raw(...)`, `cursor.execute(...)`, or `.extra(...)` must
+      pass parameters as a separate argument, never via f-string or
+      `%`/`+` string concatenation. Interpolated SQL is how SQL
+      injection happens.
+    engine: script
+    scope: ["*.py"]
+    severity: error
+    script: "grep -nE '(\\.raw|\\.extra|cursor\\.execute)\\([[:space:]]*f[\"'\\'']' {file} && exit 1 || exit 0"
+
+  no-objects-all-in-views:
+    description: >
+      Do not call `.objects.all()` without pagination or a `[:N]` slice
+      in a view. Unbounded querysets blow up memory once the table
+      grows. Use `Paginator`, DRF pagination, or an explicit limit.
+    engine: script
+    scope: ["*.py"]
+    severity: warning
+    script: "grep -nE '\\.objects\\.all\\(\\)[[:space:]]*$' {file} && exit 1 || exit 0"
+
+  prefer-select-related-over-n-plus-one:
+    description: >
+      When a view or serializer iterates a queryset and touches a
+      ForeignKey / OneToOne field, use `select_related()` for those
+      joins. For ManyToMany or reverse FK access, use
+      `prefetch_related()`. Missing these is the classic Django N+1
+      and shows up as mysterious production latency.
+    engine: semantic
+    scope: ["*.py"]
+    severity: error
+
+  model-methods-not-view-logic:
+    description: >
+      Domain logic that operates on a single model instance belongs on
+      the model (as a method or `@property`), not duplicated across
+      views and serializers. If you see a view computing something
+      derivable from one model's fields, push it down to the model.
+    engine: semantic
+    scope: ["*.py"]
+    severity: warning
+
+  form-clean-validates-fields:
+    description: >
+      Form and serializer validation that checks field shape, required
+      values, or cross-field consistency belongs in `clean_<field>` /
+      `clean()` (Forms) or `validate_<field>` / `validate()`
+      (DRF serializers). Do not re-validate in the view -- it bypasses
+      the framework's error-collection path and produces inconsistent
+      API responses.
+    engine: semantic
+    scope: ["*.py"]
+    severity: warning

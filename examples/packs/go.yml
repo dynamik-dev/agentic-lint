@@ -1,0 +1,86 @@
+# Go rule pack for agentic-lint.
+#
+# Framework: Go (standard library, idiomatic project layouts).
+# Usage: copy rules into your project's `.agentic-lint.yml` or reference
+# them as a starting point. These are opinionated defaults -- adjust the
+# scope globs and severities to fit your codebase.
+#
+# Script rules here are intentionally heuristic (grep-based). They trade
+# some false positives for zero tooling setup. If you already run
+# `go vet`, `errcheck`, or `staticcheck` in CI, prefer those for
+# deep analysis and keep these rules for the fast PostToolUse loop.
+
+rules:
+  no-naked-returns:
+    description: >
+      Avoid naked returns (a bare `return` in a function with named return
+      values). They obscure what is actually being returned and make refactors
+      dangerous. This check is heuristic: it flags any line that is exactly
+      `return` so it may fire inside functions without named returns -- in
+      that case, prefer `return nil` or the explicit zero values anyway.
+    engine: script
+    scope: ["*.go"]
+    severity: warning
+    script: "grep -nE '^[[:space:]]+return[[:space:]]*$' {file} && exit 1 || exit 0"
+
+  no-panic-in-library-code:
+    description: >
+      `panic(` is reserved for truly unrecoverable states. Library packages
+      should return errors instead so callers can decide how to handle them.
+      This rule flags any `panic(` occurrence; acceptable uses (programmer
+      errors in `main.go` or `cmd/*`) should be scoped out per-project.
+    engine: script
+    scope: ["*.go"]
+    severity: error
+    script: "grep -nE '(^|[^[:alnum:]_])panic\\(' {file} && exit 1 || exit 0"
+
+  no-init-function:
+    description: >
+      `func init()` runs at import time, hides side effects, and makes
+      packages impossible to test in isolation. Prefer an explicit
+      constructor or `sync.Once` inside the function that needs it.
+    engine: script
+    scope: ["*.go"]
+    severity: warning
+    script: "grep -nE '^func[[:space:]]+init\\(\\)' {file} && exit 1 || exit 0"
+
+  errors-wrapped-not-formatted:
+    description: >
+      When returning an error produced by a caller, wrap it with
+      `fmt.Errorf(\"... %w\", err)` so the chain survives for `errors.Is`
+      and `errors.As`. Using `%v` stringifies the error and discards the
+      chain, which silently breaks error-type assertions downstream.
+    engine: semantic
+    scope: ["*.go"]
+    severity: error
+
+  context-first-param:
+    description: >
+      If a function takes a `context.Context`, it must be the first
+      parameter and named `ctx`. Putting ctx anywhere else violates the
+      standard library convention and makes cancellation plumbing
+      inconsistent across call sites.
+    engine: semantic
+    scope: ["*.go"]
+    severity: error
+
+  no-interface-pointer-receiver-mix:
+    description: >
+      A type that satisfies an interface should use a consistent receiver
+      kind across its methods. Mixing value receivers and pointer receivers
+      on the same type leads to surprising interface satisfaction rules and
+      hidden copies. Pick one and stay with it, with pointer receivers as
+      the default for non-trivial types.
+    engine: semantic
+    scope: ["*.go"]
+    severity: warning
+
+  goroutine-lifecycle:
+    description: >
+      Every `go` statement must have a clear stop condition visible in the
+      same function or documented on the caller: a channel that will close,
+      a `context.Context` that will cancel, or a `sync.WaitGroup` the caller
+      awaits. A goroutine without a lifecycle anchor is a leak in waiting.
+    engine: semantic
+    scope: ["*.go"]
+    severity: error

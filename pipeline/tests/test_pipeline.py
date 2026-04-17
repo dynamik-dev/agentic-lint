@@ -64,10 +64,19 @@ def test_pipeline_script_violation_blocks():
 
 
 def test_pipeline_clean_file_produces_semantic_payload():
+    # Provide a multi-line diff so the can't-match filter (plan 4.2) lets
+    # semantic rules through.
+    diff = (
+        "--- a/clean.php\n"
+        "+++ b/clean.php\n"
+        "@@ -10,2 +10,3 @@\n"
+        "+    $result = User::query()->get();\n"
+        "+    return ['users' => $result];\n"
+    )
     result = run_pipeline(
         str(FIXTURES / "basic-config.yml"),
         str(FIXTURES / "clean.php"),
-        "+ $result = User::query()->get();",
+        diff,
     )
     assert result["status"] == "evaluate"
     assert "no-compact" in result["passed_checks"]

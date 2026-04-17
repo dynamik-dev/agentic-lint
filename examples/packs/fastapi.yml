@@ -1,0 +1,93 @@
+# FastAPI starter rule pack
+#
+# Stack: FastAPI services in Python 3.10+. Assumes Pydantic v2.
+#
+# How to use:
+#   - Copy these rules into your project's `.agentic-lint.yml` under
+#     the `rules:` key, or
+#   - Once the extends mechanism ships (see docs/plan.md section 3.2):
+#
+#       extends: ["@agentic-lint/fastapi"]
+#
+# These are starting points. Narrow `scope` to your application
+# package (e.g. `app/**/*.py`) so the rules don't fire on tests or
+# conftest files, and adjust severities to match your team.
+
+rules:
+  no-global-db-session:
+    description: >
+      Do not create a module-level SQLAlchemy `Session()` or
+      `SessionLocal()` instance. Sessions are request-scoped; use a
+      FastAPI `Depends(get_db)` dependency so each request gets a
+      fresh, properly closed session. Globals leak connections and
+      serialize unrelated requests.
+    engine: script
+    scope: ["*.py"]
+    severity: error
+    script: "grep -nE '^[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*=[[:space:]]*(Session|SessionLocal)\\(\\)' {file} && exit 1 || exit 0"
+
+  no-bare-exceptions-in-handlers:
+    description: >
+      Route handlers and dependencies must not use bare `except:` or
+      blanket `except Exception:` that swallow the error. Either let
+      FastAPI produce a 500, or catch a specific exception and raise
+      `HTTPException` with an accurate status code and message.
+    engine: script
+    scope: ["*.py"]
+    severity: error
+    script: "grep -nE '^[[:space:]]*except([[:space:]]*:|[[:space:]]+Exception[[:space:]]*:)' {file} && exit 1 || exit 0"
+
+  no-requests-in-async:
+    description: >
+      Do not call the synchronous `requests` library from code that is
+      already async. It blocks the event loop and serializes every
+      other request. Use `httpx.AsyncClient` (or `aiohttp`) inside
+      `async def` handlers.
+    engine: script
+    scope: ["*.py"]
+    severity: error
+    script: "grep -nE '^(import|from)[[:space:]]+requests(\\b|$)' {file} && exit 1 || exit 0"
+
+  no-sync-blocking-in-async-endpoint:
+    description: >
+      Inside an `async def` endpoint or dependency, do not call
+      blocking I/O (synchronous DB drivers, `time.sleep`, sync
+      `open().read()` on large files, subprocess without `asyncio`).
+      Either switch to an async client, or run the blocking call via
+      `await run_in_threadpool(...)` / `asyncio.to_thread(...)`.
+    engine: semantic
+    scope: ["*.py"]
+    severity: error
+
+  pydantic-strict-mode:
+    description: >
+      Request and response models should be strict: declare precise
+      types (no bare `dict`, `list`, or `Any`), mark optional fields
+      with `| None = None`, and use `ConfigDict(extra="forbid")` on
+      request bodies so unexpected fields fail loudly. Loose models
+      defeat the point of using FastAPI.
+    engine: semantic
+    scope: ["*.py"]
+    severity: warning
+
+  dependency-injection-not-globals:
+    description: >
+      Route handlers should receive collaborators (DB session, HTTP
+      client, settings, current user) via `Depends(...)` parameters,
+      not by importing a module-level singleton. Dependency injection
+      is what makes FastAPI endpoints testable and swap-able; reaching
+      for a global bypasses that.
+    engine: semantic
+    scope: ["*.py"]
+    severity: warning
+
+  no-business-logic-in-routes:
+    description: >
+      Route functions should orchestrate: parse the request, call a
+      service / use-case, shape the response. Multi-step business
+      logic, transactions spanning multiple models, or external API
+      coordination belongs in a service module, not inline in the
+      `@router.post(...)` handler.
+    engine: semantic
+    scope: ["*.py"]
+    severity: warning

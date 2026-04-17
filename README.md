@@ -1,12 +1,26 @@
 # agentic-lint
 
-An agent-native lint pipeline for Claude Code. One config file (`.agentic-lint.yml`), one enforcement point (`PostToolUse` hook), one violation format. Works for any language — rules are scoped by file glob, not by language declaration.
+An agent-native lint pipeline for Claude Code. One config file (`.agentic-lint.yml`), one enforcement point (`PostToolUse` hook), one violation format. Works for any language -- rules are scoped by file glob, not by language declaration.
+
+## What actually happens
+
+```
+$ # Claude edits app.ts and adds a console.log.
+$ # The PostToolUse hook runs .agentic-lint.yml against the edit.
+$ # no-console-log (script rule) fires -- exit code 2.
+$ # Claude's Edit tool call is blocked; the violation text is fed back.
+$ # Claude removes the console.log and re-edits. Hook passes. Done.
+```
+
+No extra prompt, no reminder in CLAUDE.md, no "please remember to". The rule fired, the tool call blocked, the agent adjusted.
 
 ## The config
 
-A `.agentic-lint.yml` is a flat list of rules. Each rule says what to check, where it applies, how bad it is, and which engine runs it — `script` (deterministic shell command) or `semantic` (natural-language rule the agent evaluates against the diff):
+A `.agentic-lint.yml` is a flat list of rules. Each rule says what to check, where it applies, how bad it is, and which engine runs it -- `script` (deterministic shell command) or `semantic` (natural-language rule the agent evaluates against the diff):
 
 ```yaml
+schema_version: 1
+
 rules:
   no-console-log:
     description: "No `console.log` in committed source -- use the project logger."
@@ -26,92 +40,61 @@ rules:
     severity: warning
 ```
 
-That's the whole surface area. The first rule runs a grep on every edited `.ts`/`.tsx`; the second ships the diff to the agent with the description as the evaluation prompt. No plugins, no DSL — just globs, shell, and prose.
+The first rule runs a grep on every edited `.ts`/`.tsx`; the second ships the diff to the agent with the description as the evaluation prompt. No plugins, no DSL -- just globs, shell, and prose.
 
-## What it does
+Starter packs for common stacks live in [`examples/packs/`](examples/packs/) (react-ts, nextjs, django, fastapi, go, rails, rust-cli). Pull one in as a baseline:
 
-Every time an agent edits a file, the hook runs a two-phase evaluation:
+```yaml
+schema_version: 1
+extends: ["@agentic-lint/react-ts"]
 
-1. **Script phase** — deterministic checks (grep, awk, or shell-out to a linter). Fast. Fails the tool call on error-severity violations via exit code 2.
-2. **Semantic phase** — if the script phase passes, the pipeline hands a unified diff plus rule descriptions to the agent for judgment-based evaluation (e.g. "inline single-use variables").
-
-Violations block the agent's tool call until fixed. Passes are silent.
-
-```
-Edit/Write tool call
-        |
-        v
-  find .agentic-lint.yml
-        |
-        v
-  filter rules by scope glob
-        |
-        +--- Phase 1: script rules
-        |       |
-        |       +--- error? exit 2, violations on stderr (blocks)
-        |       |
-        |       +--- pass? continue
-        |
-        +--- Phase 2: semantic payload
-                |
-                +--- injected as additionalContext
-                     for the agent to evaluate
+rules:
+  # your project-specific rules here
 ```
 
-## Why
+Local rules override pack rules of the same id.
 
-Traditional linters fragment across tools (PHPStan, Pint, ESLint, Pest arch tests, CLAUDE.md prose). Each has its own config, its own violation format, its own trigger. Agents have to understand all of them.
+## How it works
 
-`agentic-lint` collapses that into a single config the agent actually reads as part of its tool loop. Deterministic rules stay deterministic. Judgment rules live in natural language where the agent reads them directly.
+Every `Edit` / `Write` tool call triggers the hook, which runs two phases:
+
+1. **Script phase** -- deterministic checks (grep, awk, shell-out to a linter). Fast. Fails the tool call on error-severity violations via exit code 2.
+2. **Semantic phase** -- if the script phase passes, the pipeline hands a unified diff plus rule descriptions to the evaluator subagent. Structured verdicts come back; the parent session surfaces them.
+
+Violations block the tool call until fixed. Passes are silent. Same trigger, same output format, same fix loop -- across every language in the repo. Deterministic rules stay as shell. Judgment rules ("inline single-use variables", "don't derive state with `useEffect`") live as plain English the agent evaluates against the diff.
 
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code)
 - Python 3.10+ (`python3 --version`)
-- `jq` — the hook uses it for JSON parsing (`brew install jq` on macOS, standard on most Linux)
 
-No other runtime dependencies. The pipeline is stdlib-only Python; you do **not** `pip install` anything to use it.
+The pipeline is stdlib-only Python and the hook is a five-line bash wrapper. You do **not** `pip install` anything to use it.
 
 ## Install
 
 ### 1. Clone somewhere stable
 
-The hook path has to be stable so Claude Code can find it every time. Pick a location and commit to it:
-
 ```bash
 git clone https://github.com/dynamik-dev/agentic-lint.git ~/.agentic-lint
 ```
 
-You can put it anywhere — `~/.agentic-lint`, `~/code/agentic-lint`, `/opt/agentic-lint`. Just use the same path in step 3.
+The path has to be stable so Claude Code finds the hook every time. Anywhere works (`~/.agentic-lint`, `~/code/agentic-lint`, `/opt/agentic-lint`) -- use the same path in step 2.
 
-### 2. Install the four skills
-
-Symlink each skill into your Claude Code skills directory so Claude picks them up:
+### 2. Symlink skills and the evaluator agent
 
 ```bash
-mkdir -p ~/.claude/skills
-ln -sf ~/.agentic-lint/skills/agentic-lint         ~/.claude/skills/agentic-lint
-ln -sf ~/.agentic-lint/skills/agentic-lint-init    ~/.claude/skills/agentic-lint-init
-ln -sf ~/.agentic-lint/skills/agentic-lint-author  ~/.claude/skills/agentic-lint-author
-ln -sf ~/.agentic-lint/skills/agentic-lint-review  ~/.claude/skills/agentic-lint-review
-```
-
-Project-scope alternative: replace `~/.claude/skills` with `.claude/skills` inside a project — the skills will only activate in that project.
-
-### 3. Install the evaluator subagent
-
-Semantic evaluations are dispatched to a dedicated subagent that runs on Sonnet (cheaper than the parent session and isolated from its context). Symlink the agent definition:
-
-```bash
-mkdir -p ~/.claude/agents
+mkdir -p ~/.claude/skills ~/.claude/agents
+for s in agentic-lint agentic-lint-init agentic-lint-author agentic-lint-review; do
+  ln -sf ~/.agentic-lint/skills/$s ~/.claude/skills/$s
+done
 ln -sf ~/.agentic-lint/agents/agentic-lint-evaluator.md ~/.claude/agents/agentic-lint-evaluator.md
 ```
 
-To change the model, edit the `model:` field in `~/.agentic-lint/agents/agentic-lint-evaluator.md` (`opus`, `sonnet`, or `haiku`). Heavier rules benefit from Sonnet; simple presence checks may run fine on Haiku.
+Project scope: symlink into `.claude/skills` / `.claude/agents` at your project root so the skills only activate there. To change the evaluator model, edit `model:` in `~/.agentic-lint/agents/agentic-lint-evaluator.md` (default is `sonnet`).
 
-### 4. Register the PostToolUse hook
+### 3. Register the PostToolUse hook
 
-Add this block to `~/.claude/settings.json` (applies across all projects):
+Add this block to `~/.claude/settings.json` (or `.claude/settings.json` in a project):
 
 ```json
 {
@@ -128,67 +111,60 @@ Add this block to `~/.claude/settings.json` (applies across all projects):
 }
 ```
 
-If you cloned somewhere other than `~/.agentic-lint`, substitute that path. Project-scope alternative: put the same block in `.claude/settings.json` at your project root.
+Restart Claude Code so it picks up the new skills, agent, and hook.
 
-### 5. Restart Claude Code
-
-Start a new Claude Code session so it picks up the new skills, agent, and hook.
-
-### 6. Verify the install
+### Verify the install
 
 ```bash
-python3 ~/.agentic-lint/pipeline/pipeline.py --help
+python3 ~/.agentic-lint/pipeline/pipeline.py --doctor
 ```
 
-You should see usage output. If Python errors out, your Python is older than 3.10 — check with `python3 --version`.
-
-That's install done. The pipeline sits silent until a project has a `.agentic-lint.yml`.
+`--doctor` checks Python version, config presence and parse-ability, hook wiring in `settings.json`, evaluator-agent registration, and each skill symlink. One line per check, `[OK]` or `[FAIL]`. All `[OK]` means you're done. A one-line installer (`curl -sSL .../install.sh | bash`) is on the roadmap.
 
 ## Quick start (per project)
 
 ### 1. Bootstrap a config
 
-In a project you want to lint, start Claude Code and run:
-
 ```
 > /agentic-lint-init
 ```
 
-The init skill detects your stack, scans for existing linter configs, asks a couple of questions, and writes a baseline `.agentic-lint.yml` at your project root. Review it, tweak to taste, commit it.
+The init skill detects your stack, scans for existing linter configs, asks a couple of questions, and writes a baseline `.agentic-lint.yml`. If a starter pack matches your stack, it wires up `extends:` for you. Review, tweak, commit.
 
-### 2. Make an edit
+### 2. Adopting in a repo with existing violations
 
-Ask Claude to edit a file in the project. The hook fires on every `Edit` / `Write` tool call:
+A fresh rule across an existing codebase lights up every pre-existing problem. Baseline the current state so only *new* violations block edits:
 
-- **No violations** — silent, the edit goes through.
-- **Error-severity script violation** — Claude's tool call is blocked, the violation text is fed back to Claude, and Claude fixes it before moving on.
-- **Semantic evaluation** — the pipeline hands Claude a diff + rule descriptions, and Claude evaluates them as part of its next turn.
+```bash
+python3 ~/.agentic-lint/pipeline/pipeline.py --baseline-init --glob "src/**/*.ts"
+```
 
-### 3. Enable telemetry (optional)
+That writes `.agentic-lint/baseline.json`. Future runs ignore anything recorded there. See [docs/design.md](docs/design.md) for the contract.
+
+### 3. Silencing a specific line
+
+When a rule is right in general but wrong on one line:
+
+```ts
+eval(expr); // agentic-lint-disable: no-eval reason: sandboxed input
+```
+
+Use sparingly. Telemetry tracks disables so noisy rules surface in `/agentic-lint-review`.
+
+### 4. Telemetry (optional)
 
 ```bash
 mkdir .agentic-lint
 ```
 
-One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in `.gitignore` — per-developer data.
-
-### 4. Review rule health
-
-After a few hundred edits:
-
-```
-> /agentic-lint-review
-```
-
-Surfaces noisy rules (fire on most edits), dead rules (never fire), and slow rules. Recommends concrete adjustments.
+One JSONL record per pipeline run lands in `.agentic-lint/log.jsonl`. Already in `.gitignore` -- per-developer data. After a few hundred edits, run `/agentic-lint-review` for noisy / dead / slow rule analysis.
 
 ### 5. Evolve the config
 
 ```
 > add a lint rule that bans var_dump() in PHP
-> tighten no-db-facade — it's noisy
+> tighten no-db-facade -- it's noisy
 > apply the recommendations from the last review
-> remove deprecated-carbon
 ```
 
 The `agentic-lint-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.agentic-lint.yml`.
@@ -200,14 +176,11 @@ For authoring and debugging rules without triggering an Edit:
 ```bash
 PIPE=~/.agentic-lint/pipeline/pipeline.py
 
-# Full pipeline against a file
-python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php
-
-# Isolate one rule
-python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php --rule no-compact
-
-# See the semantic prompt that would be sent to the LLM
-python3 "$PIPE" --config .agentic-lint.yml --file src/foo.php --print-prompt
+python3 "$PIPE" --validate                                   # parse + enum checks
+python3 "$PIPE" --file src/foo.php                           # full pipeline on a file
+python3 "$PIPE" --file src/foo.php --rule no-compact         # isolate one rule
+python3 "$PIPE" --file src/foo.php --print-prompt            # see the semantic prompt
+python3 "$PIPE" --show-resolved-config                       # rules after extends:
 ```
 
 ## Uninstall
@@ -221,42 +194,24 @@ rm -rf ~/.agentic-lint
 
 ## Development
 
-If you want to hack on agentic-lint itself:
-
 ```bash
 cd ~/.agentic-lint
-pip install -e ".[dev]"   # pulls ruff, shellcheck-py, pytest, pre-commit
+pip install -e ".[dev]"   # ruff, shellcheck-py, pytest, pre-commit
 bash scripts/lint.sh      # ruff + shellcheck + pytest + dogfood
 ```
 
-- `scripts/lint.sh` — full quality gate.
-- `scripts/dogfood.sh` — runs the pipeline against every source file in this repo.
-- `.github/workflows/ci.yml` — the same checks on every PR.
-- `.pre-commit-config.yaml` — optional: `pre-commit install` to run checks before every commit.
+`scripts/dogfood.sh` runs the pipeline against every source file in this repo. `.github/workflows/ci.yml` runs the same checks on every PR.
 
 ## Docs
 
-- [Design](docs/design.md) — architecture, data flow, decisions, trade-offs.
-- [Rule authoring](docs/rule-authoring.md) — how to write script and semantic rules, how to test them.
-- [Telemetry](docs/telemetry.md) — log format, analyzer usage, self-improvement workflow.
+- [Design](docs/design.md) -- architecture, data flow, baseline contract, trade-offs.
+- [Rule authoring](docs/rule-authoring.md) -- script and semantic rules, testing.
+- [Telemetry](docs/telemetry.md) -- log format, analyzer, self-improvement workflow.
 
-## Layout
+## License
 
-```
-agentic-lint/
-├── pipeline/
-│   ├── pipeline.py      # two-phase lint engine
-│   ├── analyzer.py      # rule-health analyzer
-│   ├── hook.sh          # PostToolUse hook entry point
-│   └── tests/           # 66 tests, stdlib-only
-├── skills/
-│   ├── agentic-lint/          # interprets hook output, dispatches evaluator
-│   ├── agentic-lint-init/     # bootstraps .agentic-lint.yml
-│   ├── agentic-lint-author/   # adds, modifies, removes rules
-│   └── agentic-lint-review/   # audits rule health
-├── agents/
-│   └── agentic-lint-evaluator.md  # semantic eval subagent (Sonnet by default)
-├── scripts/             # lint.sh, dogfood.sh
-├── examples/            # sample configs
-└── .agentic-lint.yml    # this repo's own lint rules (dogfood)
-```
+MIT. See [LICENSE](LICENSE).
+
+## Contributing
+
+Issues and PRs welcome. Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before participating, [SECURITY.md](SECURITY.md) for how to report vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) for release notes.

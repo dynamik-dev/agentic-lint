@@ -1,3 +1,5 @@
+schema_version: 1
+
 rules:
   stdlib-only:
     description: >
@@ -41,7 +43,7 @@ rules:
       in file names, class names, function names, or comments. Source code
       must not carry project-management artifacts.
     engine: semantic
-    scope: "*"
+    scope: ["*.py", "*.ts", "*.tsx", "*.go", "*.rs", "*.php", "*.rb", "*.js", "*.sh"]
     severity: error
 
   todo-with-ticket:

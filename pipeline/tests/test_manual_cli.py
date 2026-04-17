@@ -33,6 +33,13 @@ def test_flag_form_accepts_config_and_file():
 def test_rule_filter_runs_only_matching_rule():
     # basic-config.yml has no-compact (script) and inline-single-use-vars (semantic).
     # Filter to just the semantic rule -- should skip script, produce evaluate status.
+    # Plan 4.2 can't-match filter requires >= 2 added diff lines to dispatch semantic.
+    diff = (
+        "--- a/violation.php\n+++ b/violation.php\n"
+        "@@ -10,2 +10,3 @@\n"
+        "+    $x = User::query()->get();\n"
+        "+    return $x;\n"
+    )
     r = run_cli(
         [
             "--config",
@@ -41,9 +48,11 @@ def test_rule_filter_runs_only_matching_rule():
             str(FIXTURES / "violation.php"),
             "--rule",
             "inline-single-use-vars",
+            "--diff",
+            diff,
         ]
     )
-    # Semantic-only → exit 0, evaluate payload on stdout
+    # Semantic-only -> exit 0, evaluate payload on stdout
     assert r.returncode == 0
     assert "inline-single-use-vars" in r.stdout
     assert "no-compact" not in r.stdout
@@ -67,6 +76,12 @@ def test_rule_filter_nonexistent_rule():
 
 
 def test_print_prompt_outputs_semantic_prompt():
+    diff = (
+        "--- a/clean.php\n+++ b/clean.php\n"
+        "@@ -10,2 +10,3 @@\n"
+        "+    $x = User::query()->get();\n"
+        "+    return $x;\n"
+    )
     r = run_cli(
         [
             "--config",
@@ -74,6 +89,8 @@ def test_print_prompt_outputs_semantic_prompt():
             "--file",
             str(FIXTURES / "clean.php"),
             "--print-prompt",
+            "--diff",
+            diff,
         ]
     )
     assert r.returncode == 0
