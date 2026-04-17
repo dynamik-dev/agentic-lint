@@ -423,3 +423,85 @@ def test_compare_fails_when_fewer_than_two_runs(tmp_path, capsys):
     assert rc != 0
     err = capsys.readouterr().err
     assert "two runs" in err.lower() or "2 runs" in err.lower()
+
+
+def test_mode_b_reports_floor_and_per_rule(tmp_path, monkeypatch):
+    """Mode B computes floor, per-rule marginal, and diff scaling."""
+    from bench import run_mode_b
+
+    cfg = tmp_path / ".bully.yml"
+    cfg.write_text(
+        "rules:\n"
+        "  sem-long:\n"
+        "    description: 'A somewhat long description that should cost more tokens than a short one'\n"
+        "    engine: semantic\n"
+        "    scope: '**/*.py'\n"
+        "    severity: error\n"
+        "  sem-short:\n"
+        "    description: short\n"
+        "    engine: semantic\n"
+        "    scope: '**/*.py'\n"
+        "    severity: warning\n"
+        "  script-only:\n"
+        "    description: scripted check\n"
+        "    engine: script\n"
+        "    scope: '**/*.py'\n"
+        "    severity: error\n"
+        "    script: 'exit 0'\n"
+    )
+    monkeypatch.setenv("BULLY_TRUST_ALL", "1")
+
+    result = run_mode_b(config_path=cfg, use_api=False, emit_json=True)
+    assert result["returncode"] == 0
+    report = result["report"]
+    assert report["floor_tokens"] > 0
+    assert len(report["per_rule"]) == 2  # two semantic rules
+    long_cost = next(
+        r["tokens"] for r in report["per_rule"] if r["id"] == "sem-long"
+    )
+    short_cost = next(
+        r["tokens"] for r in report["per_rule"] if r["id"] == "sem-short"
+    )
+    assert long_cost > short_cost
+    assert "diff_scaling" in report
+    sizes = [row["added_lines"] for row in report["diff_scaling"]]
+    assert sizes == [1, 10, 100, 1000]
+    # Monotonically non-decreasing as diff grows.
+    totals = [row["total_tokens"] for row in report["diff_scaling"]]
+    assert totals == sorted(totals)
+    # Script rule listed separately as zero-cost model-wise.
+    assert any(r["id"] == "script-only" for r in report["deterministic_rules"])
+
+
+def test_mode_b_handles_config_with_no_semantic_rules(tmp_path, monkeypatch):
+    """Empty-semantic config reports floor=0 and empty per-rule."""
+    from bench import run_mode_b
+
+    cfg = tmp_path / ".bully.yml"
+    cfg.write_text(
+        "rules:\n"
+        "  scripted:\n"
+        "    description: d\n"
+        "    engine: script\n"
+        "    scope: '**/*.py'\n"
+        "    severity: warning\n"
+        "    script: 'exit 0'\n"
+    )
+    monkeypatch.setenv("BULLY_TRUST_ALL", "1")
+
+    result = run_mode_b(config_path=cfg, use_api=False, emit_json=True)
+    assert result["returncode"] == 0
+    report = result["report"]
+    assert report["floor_tokens"] == 0
+    assert report["per_rule"] == []
+    assert len(report["deterministic_rules"]) == 1
+
+
+def test_mode_b_errors_when_config_missing(tmp_path, capsys):
+    """Missing config path yields a clear error."""
+    from bench import run_mode_b
+
+    result = run_mode_b(config_path=tmp_path / "nope.yml", use_api=False)
+    assert result["returncode"] != 0
+    err = capsys.readouterr().err
+    assert "not found" in err.lower()
