@@ -46,29 +46,58 @@ def evaluate_rule(
 ) -> RuleResult:
     """Run one rule against one file and return a ready-to-fold RuleResult.
 
-    `executor_fn` is the engine-specific runner (e.g. a lambda wrapping
-    execute_script_rule or execute_ast_rule). It is called with the rule
-    and ctx; it returns raw Violations. This helper then applies
-    fix_hint, line-disable filtering, and baseline filtering, and builds
-    the rule_records entry matching pipeline.py's historical shape.
+    Exceptions raised by executor_fn or the filters are caught and
+    converted to a single blocking Violation so one bad rule cannot
+    take down the rest of the run. KeyboardInterrupt and SystemExit
+    are intentionally not caught.
     """
     start = time.perf_counter()
-    violations = executor_fn(rule, ctx)
+    try:
+        violations = executor_fn(rule, ctx)
+
+        if rule.fix_hint:
+            violations = [
+                replace(v, suggestion=v.suggestion or rule.fix_hint) for v in violations
+            ]
+
+        filtered: list[Violation] = []
+        for v in violations:
+            if _line_has_disable(ctx.file_path, v.line, rule.id):
+                continue
+            if _is_baselined(
+                ctx.baseline, rule.id, ctx.config_path, ctx.file_path, v.line
+            ):
+                continue
+            filtered.append(v)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:  # noqa: BLE001 — intentional broad catch for isolation
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        description = f"internal error: {type(exc).__name__}: {exc}"[:500]
+        err_violation = Violation(
+            rule=rule.id,
+            engine=engine,
+            severity="error",
+            line=None,
+            description=description,
+        )
+        record = {
+            "id": rule.id,
+            "engine": engine,
+            "verdict": "violation",
+            "severity": "error",
+            "line": None,
+            "latency_ms": latency_ms,
+            "error": True,
+        }
+        return RuleResult(
+            rule_id=rule.id,
+            violations=[err_violation],
+            record=record,
+            internal_error=True,
+        )
+
     latency_ms = int((time.perf_counter() - start) * 1000)
-
-    if rule.fix_hint:
-        violations = [
-            replace(v, suggestion=v.suggestion or rule.fix_hint) for v in violations
-        ]
-
-    filtered: list[Violation] = []
-    for v in violations:
-        if _line_has_disable(ctx.file_path, v.line, rule.id):
-            continue
-        if _is_baselined(ctx.baseline, rule.id, ctx.config_path, ctx.file_path, v.line):
-            continue
-        filtered.append(v)
-
     if filtered:
         record = {
             "id": rule.id,

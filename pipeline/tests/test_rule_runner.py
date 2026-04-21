@@ -24,8 +24,9 @@ def test_rule_result_defaults():
     assert result.internal_error is False
 
 
-from pipeline import Rule, Violation
 from rule_runner import evaluate_rule
+
+from pipeline import Rule, Violation
 
 
 def _make_rule(rid="r1", severity="error", fix_hint=None):
@@ -75,3 +76,39 @@ def test_evaluate_rule_propagates_fix_hint():
     )
     result = evaluate_rule(rule, ctx, "script", executor_fn=lambda r, c: [violation])
     assert result.violations[0].suggestion == "use foo() instead"
+
+
+def test_evaluate_rule_isolates_exceptions_as_blocking_violation():
+    rule = _make_rule(severity="warning")  # prove severity gets overridden to error
+
+    def boom(r, c):
+        raise RuntimeError("kaboom")
+
+    ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)
+    result = evaluate_rule(rule, ctx, "script", executor_fn=boom)
+
+    assert result.internal_error is True
+    assert len(result.violations) == 1
+    v = result.violations[0]
+    assert v.rule == "r1"
+    assert v.engine == "script"
+    assert v.severity == "error"  # blocking, regardless of rule.severity
+    assert v.description.startswith("internal error: RuntimeError")
+    assert "kaboom" in v.description
+    assert result.record["verdict"] == "violation"
+    assert result.record["error"] is True
+
+
+def test_evaluate_rule_truncates_long_exception_messages_to_500_chars():
+    rule = _make_rule()
+
+    def boom(r, c):
+        raise RuntimeError("x" * 600)
+
+    ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)
+    result = evaluate_rule(rule, ctx, "script", executor_fn=boom)
+
+    assert len(result.violations) == 1
+    description = result.violations[0].description
+    assert len(description) == 500
+    assert description.startswith("internal error: RuntimeError:")
