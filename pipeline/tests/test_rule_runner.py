@@ -171,6 +171,28 @@ def test_run_rules_parallel_max_workers_1_serializes():
     assert elapsed >= 0.28, f"expected serial ~0.3s, got {elapsed:.2f}s"
 
 
+def test_run_rules_parallel_single_rule_skips_the_pool():
+    # Fast path: one rule must execute on the calling thread, not a worker.
+    import threading as _threading
+
+    rules = [_make_rule("r0")]
+    ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)
+    calling_thread = _threading.current_thread()
+    observed: dict[str, _threading.Thread] = {}
+
+    def fn(rule, c):
+        observed["thread"] = _threading.current_thread()
+        return []
+
+    results = run_rules_parallel(rules, ctx, "script", fn, max_workers=8)
+    assert len(results) == 1
+    assert results[0].rule_id == "r0"
+    assert observed["thread"] is calling_thread, (
+        f"expected fast path to run inline on calling thread "
+        f"({calling_thread.name}), got {observed['thread'].name}"
+    )
+
+
 def test_run_rules_parallel_one_raising_rule_does_not_abort_others():
     rules = [_make_rule("r0"), _make_rule("r1"), _make_rule("r2")]
     ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)

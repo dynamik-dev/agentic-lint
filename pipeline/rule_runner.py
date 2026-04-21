@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 
 # Dual-mode import: works both when `pipeline/` is on sys.path (test / direct
@@ -141,6 +140,16 @@ def run_rules_parallel(
     """
     if not rules:
         return []
+    # Fast path: a single rule doesn't benefit from pool setup (~1-2ms of
+    # thread-spawn and executor teardown overhead per invocation). Call
+    # evaluate_rule inline. This matters because many real-world files match
+    # only one or two rules, and the hook runs per-file.
+    if len(rules) == 1:
+        return [evaluate_rule(rules[0], ctx, engine, executor_fn)]
+    # Imported lazily: most hook invocations hit the single-rule fast path
+    # above and never need concurrent.futures, which is slow to import cold.
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
     # A pool with zero workers would deadlock on submit(); clamp to >=1.
     workers = max(1, min(max_workers, len(rules)))
     results: list[RuleResult | None] = [None] * len(rules)
