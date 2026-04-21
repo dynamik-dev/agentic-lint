@@ -2,6 +2,10 @@
 All notable changes documented here. Format per Keep a Changelog, semver adherence.
 
 ## [Unreleased]
+### Added
+- Parallel execution of script and AST rules within a single file (`execution.max_workers` config, `BULLY_MAX_WORKERS` env). Default `min(8, os.cpu_count() or 4)`.
+- Per-rule exception isolation: a rule that raises now emits a blocking internal-error violation, and other rules still run to completion.
+
 ### Planned
 See docs/plan.md for the active improvement plan.
 
