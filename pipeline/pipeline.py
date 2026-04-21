@@ -344,8 +344,7 @@ def _parse_single_file(path: str) -> _ParsedConfig:
             value_raw = value.strip()
             if key != "max_workers":
                 raise ConfigError(
-                    f"unknown execution field '{key}' "
-                    f"(allowed: max_workers)",
+                    f"unknown execution field '{key}' (allowed: max_workers)",
                     lineno,
                 )
             parsed_val = _parse_scalar(value_raw)
@@ -1782,19 +1781,13 @@ def run_pipeline(
     with phase_timer("script_exec"):
         if script_rules:
             _fold(
-                run_rules_parallel(
-                    script_rules, rule_ctx, "script", _adapter_script, max_workers
-                )
+                run_rules_parallel(script_rules, rule_ctx, "script", _adapter_script, max_workers)
             )
 
     with phase_timer("ast_exec"):
         if ast_rules:
             if ast_grep_available():
-                _fold(
-                    run_rules_parallel(
-                        ast_rules, rule_ctx, "ast", _adapter_ast, max_workers
-                    )
-                )
+                _fold(run_rules_parallel(ast_rules, rule_ctx, "ast", _adapter_ast, max_workers))
             else:
                 sys.stderr.write(
                     "bully: engine:ast rules matched but ast-grep not on PATH; skipping. "

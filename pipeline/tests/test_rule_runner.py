@@ -58,9 +58,7 @@ def test_evaluate_rule_pass_path():
 def test_evaluate_rule_violation_path():
     rule = _make_rule()
     ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)
-    violation = Violation(
-        rule="r1", engine="script", severity="error", line=12, description="bad"
-    )
+    violation = Violation(rule="r1", engine="script", severity="error", line=12, description="bad")
     result = evaluate_rule(rule, ctx, "script", executor_fn=lambda r, c: [violation])
     assert len(result.violations) == 1
     assert result.violations[0].line == 12
@@ -71,9 +69,7 @@ def test_evaluate_rule_violation_path():
 def test_evaluate_rule_propagates_fix_hint():
     rule = _make_rule(fix_hint="use foo() instead")
     ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)
-    violation = Violation(
-        rule="r1", engine="script", severity="error", line=5, description="bad"
-    )
+    violation = Violation(rule="r1", engine="script", severity="error", line=5, description="bad")
     result = evaluate_rule(rule, ctx, "script", executor_fn=lambda r, c: [violation])
     assert result.violations[0].suggestion == "use foo() instead"
 
@@ -123,6 +119,7 @@ def _delayed_executor(delay_by_id: dict[str, float]):
     def fn(rule, ctx):
         _time.sleep(delay_by_id.get(rule.id, 0.0))
         return []
+
     return fn
 
 
@@ -131,9 +128,7 @@ def test_run_rules_parallel_preserves_declaration_order():
     ctx = RuleContext(file_path="f.py", diff="", baseline={}, config_path=None)
     # Staggered delays so completion order != declaration order.
     delays = {"r0": 0.12, "r1": 0.02, "r2": 0.08, "r3": 0.04}
-    results = run_rules_parallel(
-        rules, ctx, "script", _delayed_executor(delays), max_workers=4
-    )
+    results = run_rules_parallel(rules, ctx, "script", _delayed_executor(delays), max_workers=4)
     assert [r.rule_id for r in results] == ["r0", "r1", "r2", "r3"]
 
 

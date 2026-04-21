@@ -57,17 +57,13 @@ def evaluate_rule(
         violations = executor_fn(rule, ctx)
 
         if rule.fix_hint:
-            violations = [
-                replace(v, suggestion=v.suggestion or rule.fix_hint) for v in violations
-            ]
+            violations = [replace(v, suggestion=v.suggestion or rule.fix_hint) for v in violations]
 
         filtered: list[Violation] = []
         for v in violations:
             if _line_has_disable(ctx.file_path, v.line, rule.id):
                 continue
-            if _is_baselined(
-                ctx.baseline, rule.id, ctx.config_path, ctx.file_path, v.line
-            ):
+            if _is_baselined(ctx.baseline, rule.id, ctx.config_path, ctx.file_path, v.line):
                 continue
             filtered.append(v)
     except (KeyboardInterrupt, SystemExit):
@@ -142,10 +138,7 @@ def run_rules_parallel(
     results: list[RuleResult | None] = [None] * len(rules)
 
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="bully-rule") as pool:
-        futures = [
-            pool.submit(evaluate_rule, rule, ctx, engine, executor_fn)
-            for rule in rules
-        ]
+        futures = [pool.submit(evaluate_rule, rule, ctx, engine, executor_fn) for rule in rules]
         for idx, fut in enumerate(futures):
             try:
                 results[idx] = fut.result()
