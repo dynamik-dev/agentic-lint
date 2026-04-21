@@ -55,10 +55,7 @@ def test_scope_glob_non_double_star_handles_absolute_paths():
     This is why the regression is not total -- rules whose scope has no `**`
     (like ``tests/Pest.php``) still fire.
     """
-    assert (
-        _scope_glob_matches("tests/Pest.php", f"{ABS_PREFIX}/tests/Pest.php")
-        is True
-    )
+    assert _scope_glob_matches("tests/Pest.php", f"{ABS_PREFIX}/tests/Pest.php") is True
 
 
 def test_filter_rules_matches_real_groups4_paths():
@@ -121,9 +118,7 @@ def test_filter_rules_matches_real_groups4_paths():
         matched_ids = {r.id for r in filter_rules(rules, abs_path)}
         missing = expected - matched_ids
         assert not missing, (
-            f"{abs_path}\n"
-            f"  missing rules: {sorted(missing)}\n"
-            f"  got: {sorted(matched_ids)}"
+            f"{abs_path}\n  missing rules: {sorted(missing)}\n  got: {sorted(matched_ids)}"
         )
 
 
@@ -166,9 +161,7 @@ def test_real_log_shows_empty_rules_confirms_regression_surface():
     entries = [json.loads(line) for line in GROUPS4_LOG.read_text().splitlines() if line]
     assert entries, "fixture should not be empty"
     # These are all pass/empty — the symptom.
-    passes_with_no_rules = [
-        e for e in entries if e.get("status") == "pass" and not e.get("rules")
-    ]
+    passes_with_no_rules = [e for e in entries if e.get("status") == "pass" and not e.get("rules")]
     assert len(passes_with_no_rules) == len(entries), (
         "0.4.0 fixture should show the symptom: every pass has rules=[]"
     )
