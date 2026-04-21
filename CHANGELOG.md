@@ -5,6 +5,13 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## [0.4.1] - 2026-04-21
+### Fixed
+- **Critical regression: every rule stopped running on 0.4.0.** 0.4.0's hand-rolled `_scope_glob_matches` (added in `edb362f` to provide recursive `**` on Python 3.10-3.12) anchored the first pattern segment at `parts[0]`, which is `"/"` for absolute paths. The PostToolUse hook always passes absolute paths, so every `**` scope missed and `filter_rules` returned `[]` for every file. The symptom in a user's `.bully/log.jsonl` was `rules: []` on every entry -- telemetry kept writing `"status": "pass"` rows but no script / AST / semantic rule ever executed. The fix restores the 0.3.x right-anchored semantic (matching `PurePath.match`) by trying the first segment at every path-parts offset while keeping recursive `**` intact. Reproduced against a real Laravel + Inertia config (`pipeline/tests/fixtures/groups4.bully.yml`) and pinned with 6 regression tests, including negative cases that guard against over-matching (`notapp/`, `appetite/`, wrong extensions).
+
+### Added
+- `ruff-format-clean` rule in the dogfood `.bully.yml`. Closes a gap where `ruff check` (run by the existing `ruff-clean` rule) and `ruff format --check` are separate subcommands: files passing lint but needing reformatting slipped through the in-session hook and tripped CI's `ruff format --check .` step after push. Now blocks unformatted Python edits before commit.
+
 ## [0.4.0] - 2026-04-21
 ### Added
 - Parallel execution of script and AST rules within a single file (`execution.max_workers` config, `BULLY_MAX_WORKERS` env). Default `min(8, os.cpu_count() or 4)`. Set `max_workers: 1` to restore serial execution if a rule script needs exclusive access to a resource. Single-rule phases skip the pool and run inline.
