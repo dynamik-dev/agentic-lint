@@ -5,6 +5,14 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## [0.5.0] - 2026-04-23
+### Changed
+- **Skills now route rules through installed linters before falling back to bully-owned enforcement.** Reframes bully as the cop and native linters (ruff, biome, eslint, tsc, phpstan, rubocop, clippy, …) as the lawmakers: the PostToolUse hook always enforces, but rule *definitions* should live wherever they express best.
+  - `bully-author`: replaces the old script/ast/semantic split with a four-option decision tree — **linter passthrough → ast → grep → semantic** — plus a linter installed-vs-missing pre-flight and an enforcement-guarantee line the skill must say once when recommending a linter, so users don't assume moving a rule into a linter removes it from bully's scope. Review-recommendation table gains a row for "grep rule a linter could cover → passthrough."
+  - `bully-init`: Step 2 rebuilt into three sub-steps — (2) detect installed linters and offer passthrough rules, (2b) *offer* (never silently install) missing conventional linters with explicit approval, (2c) route project-specific rules (CLAUDE.md sections, arch tests, team conventions) through the same four-option tree.
+  - `bully-review`: two new FYI rows flagging mis-routed rules — grep matching a structural pattern → propose `engine: ast`; grep matching something an installed linter covers → propose moving the rule into the linter's config and replacing the bully rule with a passthrough.
+- No schema, engine, or hook contract changes. Existing `.bully.yml` configs continue to work unchanged — only the skill guidance shifts going forward.
+
 ## [0.4.1] - 2026-04-21
 ### Fixed
 - **Critical regression: every rule stopped running on 0.4.0.** 0.4.0's hand-rolled `_scope_glob_matches` (added in `edb362f` to provide recursive `**` on Python 3.10-3.12) anchored the first pattern segment at `parts[0]`, which is `"/"` for absolute paths. The PostToolUse hook always passes absolute paths, so every `**` scope missed and `filter_rules` returned `[]` for every file. The symptom in a user's `.bully/log.jsonl` was `rules: []` on every entry -- telemetry kept writing `"status": "pass"` rows but no script / AST / semantic rule ever executed. The fix restores the 0.3.x right-anchored semantic (matching `PurePath.match`) by trying the first segment at every path-parts offset while keeping recursive `**` intact. Reproduced against a real Laravel + Inertia config (`pipeline/tests/fixtures/groups4.bully.yml`) and pinned with 6 regression tests, including negative cases that guard against over-matching (`notapp/`, `appetite/`, wrong extensions).
