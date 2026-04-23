@@ -5,6 +5,17 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## [0.6.0] - 2026-04-23
+### Changed
+- **`bully-init` hardened against real-world config hallucinations.** Based on a live install transcript where the skill wrote a `.bully.yml` with a hallucinated `telemetry:` top-level key and `exclude:` list (the real key is `skip`), then spent output budget explaining a PostToolUse `[FAIL]` line that's a known false positive for plugin installs.
+  - New **mandatory draft-then-validate protocol**: write the proposed `.bully.yml` to a scratch path, run `bully --validate --config <path>`, only `mv` onto `.bully.yml` on exit-0. Invalid configs never land on the user's filesystem.
+  - New **stack-aware default skip globs** table (Python / Node / PHP / Go / Rust / Ruby) so the LLM has a reference instead of inventing per-session.
+  - New **linter precedence** guidance: when ruff AND black+isort are installed, default to ruff; when biome AND eslint+prettier, pick one stack -- wiring conflicting tools causes noise.
+  - Expanded doctor false-positive list to cover (a) PostToolUse-hook-not-in-`settings.json` (plugins load `hooks/hooks.json` dynamically) and (b) stale-cache skill/agent version mismatches. Skill now notes them instead of attempting to "fix" them.
+  - New **binary-resolution one-liner** (`command -v bully || ls -d ~/.claude/plugins/cache/*/bully/*/bully | sort -V | tail -1`) that prefers `$PATH` and falls back to the newest plugin-cache version, avoiding version-pinned paths.
+  - **Telemetry is on by default.** `/bully-init` now creates `.bully/` and adds it to `.gitignore` unless the user explicitly opts out. `/bully-review` has data to read the first time it runs, instead of reporting "empty log" weeks later.
+- **README and design docs realigned with linter-passthrough routing.** The config, engine choice, and init-workflow docs were still pushing the pre-v0.5.0 framing (grep-first, external linters as opt-in). Lead README config example is now a `ruff-check` passthrough. Added a "Where rules live" section, a cop-vs-lawmakers framing line, and updated `/bully-init` description to mention linter detection and install-on-approval behavior. `docs/rule-authoring.md` priority order rewritten as passthrough → ast → script → semantic. `docs/design.md` Migration/Baselines subsections rewritten to treat linter routing as the default, not an opt-in.
+
 ## [0.5.0] - 2026-04-23
 ### Changed
 - **Skills now route rules through installed linters before falling back to bully-owned enforcement.** Reframes bully as the cop and native linters (ruff, biome, eslint, tsc, phpstan, rubocop, clippy, …) as the lawmakers: the PostToolUse hook always enforces, but rule *definitions* should live wherever they express best.
