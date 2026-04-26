@@ -28,7 +28,6 @@ from pipeline import (
     parse_script_output,
 )
 
-
 # --- phpstan-style indented table output ----------------------------------
 
 

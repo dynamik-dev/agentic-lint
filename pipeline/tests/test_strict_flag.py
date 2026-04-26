@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 BULLY = Path(__file__).resolve().parents[2] / "pipeline" / "pipeline.py"
 
 
-def _run(argv: list[str], cwd: Path, env: dict | None = None, stdin: str = "") -> subprocess.CompletedProcess:
+def _run(
+    argv: list[str], cwd: Path, env: dict | None = None, stdin: str = ""
+) -> subprocess.CompletedProcess:
     merged_env = os.environ.copy()
     # Clear BULLY_TRUST_ALL so trust gating actually runs -- conftest
     # opts into it for the in-process tests, but for subprocess tests we
