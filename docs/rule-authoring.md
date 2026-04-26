@@ -253,10 +253,24 @@ Script rules may print violations in several formats. The pipeline's adapter rec
 2. **JSON array** of such objects.
 3. **`file:line:col: message`** — ESLint, Ruff, clang, PHPStan compact output.
 4. **`file:line: message`** — mypy, many compilers.
-5. **`line:content`** — `grep -n` and similar.
-6. **Anything else** — the raw output becomes the violation description (truncated to 500 chars). No output is dropped silently.
+5. **Indented `line   message`** — phpstan's table output, pest's per-test failures. Lines without a leading number that follow a numbered line are treated as continuations of the same violation (wrapped messages get joined back).
+6. **Anything else** — the tail of unmatched output becomes up to 20 individual violations (each capped at 500 chars). Separator rows (`----`, `====`) are dropped. Both stdout and stderr are parsed; numbered hits from either stream are preferred over unstructured tails.
 
-Prefer formats that include a line number. Violations with line numbers are more actionable for the agent.
+Prefer formats that include a line number. Violations with line numbers are more actionable for the agent and can be targeted by `// bully-disable: rule-id` directives and `baseline.json`.
+
+### `output: passthrough` (escape hatch)
+
+For tools whose output defies the continuation heuristic (banners, ASCII art, interleaved streams), set `output: passthrough` on the rule. The pipeline will skip structured parsing entirely and emit a single violation carrying the tail of stdout+stderr. Use sparingly — passthrough violations have `line=None`, so they can't be baselined or disabled per line.
+
+```yaml
+weird-tool:
+  description: "Runs a tool with non-standard output format"
+  engine: script
+  scope: "*.foo"
+  severity: warning
+  script: "my-weird-tool {file}"
+  output: passthrough
+```
 
 ## Sharing rules across repos with `extends:`
 
@@ -308,6 +322,22 @@ It parses `.bully.yml` (plus anything it extends) with the same hardened reader 
 Exit code 0 means clean. Exit code 1 prints a report and a non-zero count. Wire it into CI to catch config drift before a hook run does.
 
 `hook.sh` calls `--validate` once per session, so a malformed config surfaces on the first edit rather than silently dropping rules across hundreds of edits.
+
+### Strict mode for CI callers
+
+`bully lint` defaults to *advisory* posture: untrusted configs exit 0 so the PostToolUse hook doesn't block edits on infra issues. CI callers that parse exit codes should pass `--strict`:
+
+```bash
+bully lint src/foo.py --strict
+```
+
+Exit codes with `--strict`:
+
+- `0` — pass (or semantic evaluate dispatched).
+- `2` — blocked (rule violations). Same as without `--strict`.
+- `3` — untrusted config, or any other non-pass status that would otherwise be advisory.
+
+The hook path is unaffected. `--strict` only changes the CLI lint path.
 
 ## Disabling per line
 

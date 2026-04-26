@@ -3,6 +3,6 @@ AGENTIC LINT -- blocked. Fix these before proceeding:
 - [no-compact] line 12: compact() is forbidden
 - [no-db-facade] line 27: use Model::query() instead of DB::
   suggestion: replace with Model::query()
-- [no-missing-line] line ?: no line info
+- [no-missing-line]: no line info
 
 Passed checks: pint-formatting, no-env

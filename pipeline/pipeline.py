@@ -38,7 +38,9 @@ VALID_RULE_FIELDS = {
     "fix_hint",
     "pattern",
     "language",
+    "output",
 }
+VALID_OUTPUT_MODES = {"parsed", "passthrough"}
 VALID_TOP_LEVEL = {"rules", "schema_version", "extends", "skip", "execution"}
 
 # User-global ignore file: one glob per line, blank lines and `#` comments
@@ -120,6 +122,7 @@ class Rule:
     fix_hint: str | None = None
     pattern: str | None = None
     language: str | None = None
+    output_mode: str = "parsed"
 
 
 @dataclass
@@ -548,6 +551,23 @@ def _build_rule(
 
     fix_hint_value = fields.get("fix_hint")
 
+    output_value = fields.get("output")
+    if output_value is None:
+        output_mode = "parsed"
+    else:
+        output_mode = str(output_value)
+        if output_mode not in VALID_OUTPUT_MODES:
+            raise ConfigError(
+                f"rule '{rule_id}': invalid output {output_mode!r} "
+                f"(must be 'parsed' or 'passthrough')",
+                field_lines.get("output", rule_line),
+            )
+        if engine != "script" and output_mode != "parsed":
+            raise ConfigError(
+                f"rule '{rule_id}': 'output' is only valid when engine is 'script'",
+                field_lines.get("output", rule_line),
+            )
+
     return Rule(
         id=rule_id,
         description=str(fields.get("description", "")),
@@ -558,6 +578,7 @@ def _build_rule(
         fix_hint=str(fix_hint_value) if fix_hint_value is not None else None,
         pattern=str(pattern_value) if pattern_value is not None else None,
         language=str(language_value) if language_value is not None else None,
+        output_mode=output_mode,
     )
 
 
@@ -1018,6 +1039,13 @@ def _line_number(content: str) -> str:
 _FILE_LINE_COL = re.compile(r"^(?P<file>[^:\s]+):(?P<line>\d+):(?P<col>\d+):\s*(?P<msg>.+)$")
 _FILE_LINE = re.compile(r"^(?P<file>[^:\s]+):(?P<line>\d+):\s*(?P<msg>.+)$")
 _LINE_CONTENT = re.compile(r"^(?P<line>\d+)[:\s-]+(?P<msg>.*)$")
+# Rows of `-`, `=`, `_`, `*`, `|`, `+` with optional whitespace are table
+# separators emitted by phpstan, pest, psalm, and similar reporters. They
+# carry no semantic content and pollute the fallback blob.
+_SEPARATOR_ONLY = re.compile(r"^[\s\-=_*|+]+$")
+
+_FALLBACK_MAX_DESC = 500
+_FALLBACK_MAX_VIOLATIONS = 20
 
 
 def _violation_from_dict(rule_id: str, severity: str, d: dict) -> Violation | None:
@@ -1039,7 +1067,23 @@ def _violation_from_dict(rule_id: str, severity: str, d: dict) -> Violation | No
 
 
 def parse_script_output(rule_id: str, severity: str, output: str) -> list[Violation]:
-    """Parse common tool output formats into Violation records."""
+    """Parse common tool output formats into Violation records.
+
+    Strategy (ordered):
+    1. JSON (object or array) -> structured dict parsing.
+    2. Per-line regex scan with stateful continuation-joining. A line whose
+       trimmed form matches `FILE:LINE:COL`, `FILE:LINE`, or leading
+       `LINE` opens a new violation; subsequent non-matching, non-separator
+       lines concatenate onto that violation's description (this captures
+       wrapped error messages from phpstan, pest, psalm, etc.). Table
+       separator rows (`------`, `======`) are dropped.
+    3. Fallback: when no numbered lines matched at all, return up to
+       _FALLBACK_MAX_VIOLATIONS individual violations for the *tail* of
+       unmatched lines (errors typically land at the end of tool output,
+       and tail-preservation survives long preambles intact).
+
+    Each violation's description is capped at _FALLBACK_MAX_DESC chars.
+    """
     stripped = output.strip()
     if not stripped:
         return []
@@ -1065,46 +1109,80 @@ def parse_script_output(rule_id: str, severity: str, output: str) -> list[Violat
 
     violations: list[Violation] = []
     unmatched: list[str] = []
-    for line in stripped.splitlines():
-        if not line.strip():
+    current: Violation | None = None
+    current_parts: list[str] = []
+
+    def _flush_current() -> None:
+        nonlocal current, current_parts
+        if current is not None:
+            joined = " ".join(p.strip() for p in current_parts if p.strip())
+            current.description = joined[:_FALLBACK_MAX_DESC]
+            violations.append(current)
+        current = None
+        current_parts = []
+
+    for raw in stripped.splitlines():
+        trimmed = raw.lstrip()
+        if not trimmed:
+            _flush_current()
             continue
-        m = _FILE_LINE_COL.match(line) or _FILE_LINE.match(line)
+        if _SEPARATOR_ONLY.match(trimmed):
+            _flush_current()
+            continue
+
+        m = _FILE_LINE_COL.match(trimmed) or _FILE_LINE.match(trimmed)
         if m:
-            violations.append(
-                Violation(
-                    rule=rule_id,
-                    engine="script",
-                    severity=severity,
-                    line=int(m.group("line")),
-                    description=m.group("msg").strip(),
-                )
+            _flush_current()
+            current = Violation(
+                rule=rule_id,
+                engine="script",
+                severity=severity,
+                line=int(m.group("line")),
+                description="",
             )
+            current_parts = [m.group("msg").strip()]
             continue
-        m = _LINE_CONTENT.match(line)
+
+        m = _LINE_CONTENT.match(trimmed)
         if m:
-            violations.append(
-                Violation(
-                    rule=rule_id,
-                    engine="script",
-                    severity=severity,
-                    line=int(m.group("line")),
-                    description=m.group("msg").strip(),
-                )
+            _flush_current()
+            current = Violation(
+                rule=rule_id,
+                engine="script",
+                severity=severity,
+                line=int(m.group("line")),
+                description="",
             )
+            current_parts = [m.group("msg").strip()]
             continue
-        unmatched.append(line)
+
+        if current is not None:
+            current_parts.append(trimmed)
+        else:
+            unmatched.append(trimmed)
+
+    _flush_current()
 
     if violations:
         return violations
 
+    # Nothing matched. Preserve the *tail* of unmatched lines as one
+    # violation per line (up to a cap). Tail preservation matters: tools
+    # like phpstan emit a long "how to interpret errors" preamble before
+    # the actual failures, and the old head-biased 500-char cap ate the
+    # preamble while dropping the signal.
+    if not unmatched:
+        return []
+    tail = unmatched[-_FALLBACK_MAX_VIOLATIONS:]
     return [
         Violation(
             rule=rule_id,
             engine="script",
             severity=severity,
             line=None,
-            description=" ".join(unmatched)[:500],
+            description=line[:_FALLBACK_MAX_DESC],
         )
+        for line in tail
     ]
 
 
@@ -1132,21 +1210,94 @@ def execute_script_rule(rule: Rule, file_path: str, diff: str) -> list[Violation
             )
         ]
 
-    if result.returncode != 0:
-        violations = parse_script_output(rule.id, rule.severity, result.stdout)
-        if not violations:
-            return [
-                Violation(
-                    rule=rule.id,
-                    engine="script",
-                    severity=rule.severity,
-                    line=None,
-                    description=rule.description,
-                )
-            ]
-        return violations
+    if result.returncode == 0:
+        return []
 
-    return []
+    # Passthrough: skip structured parsing. Useful for tools whose output
+    # format defies the continuation heuristic (banners, ASCII art,
+    # interleaved streams). Emits one violation carrying the tail of
+    # combined stdout+stderr.
+    if rule.output_mode == "passthrough":
+        combined = _combine_streams(result.stdout, result.stderr)
+        return [
+            Violation(
+                rule=rule.id,
+                engine="script",
+                severity=rule.severity,
+                line=None,
+                description=_tail_for_description(combined),
+            )
+        ]
+
+    # Parse both streams; prefer structured (line-numbered) results over
+    # unstructured tail fallbacks regardless of which stream they came
+    # from. Tools mix streams inconsistently -- pint writes failures to
+    # stderr, phpstan to stdout, pest to stdout, psalm to stderr -- so
+    # pick the higher-signal stream rather than guessing up front.
+    stdout_vs = parse_script_output(rule.id, rule.severity, result.stdout)
+    stderr_vs: list[Violation] = []
+    if result.stderr and result.stderr.strip():
+        stderr_vs = parse_script_output(rule.id, rule.severity, result.stderr)
+
+    def _has_numbered(vs: list[Violation]) -> bool:
+        return any(v.line is not None for v in vs)
+
+    stdout_numbered = _has_numbered(stdout_vs)
+    stderr_numbered = _has_numbered(stderr_vs)
+    if stdout_numbered and stderr_numbered:
+        return [*stdout_vs, *stderr_vs]
+    if stdout_numbered:
+        return stdout_vs
+    if stderr_numbered:
+        return stderr_vs
+
+    # Neither stream produced numbered violations. Combine their tails
+    # (they're frequently split across streams) and emit as one fallback
+    # violation so the agent sees the actual tool complaint, not just
+    # the rule's static description.
+    combined = _combine_streams(result.stdout, result.stderr)
+    tail = _tail_for_description(combined)
+    if tail:
+        description = f"{rule.description}: {tail}" if rule.description else tail
+    else:
+        description = rule.description
+    return [
+        Violation(
+            rule=rule.id,
+            engine="script",
+            severity=rule.severity,
+            line=None,
+            description=description[:_FALLBACK_MAX_DESC],
+        )
+    ]
+
+
+def _combine_streams(stdout: str, stderr: str) -> str:
+    """Join stdout and stderr with a visible separator when both are non-empty."""
+    parts: list[str] = []
+    if stdout and stdout.strip():
+        parts.append(stdout.strip())
+    if stderr and stderr.strip():
+        parts.append(stderr.strip())
+    return "\n".join(parts)
+
+
+def _tail_for_description(text: str) -> str:
+    """Return a compact tail of tool output suitable for a Violation description.
+
+    Keeps the last few non-empty, non-separator lines (where tool errors
+    typically land) and joins them with spaces. Capped at _FALLBACK_MAX_DESC.
+    """
+    if not text:
+        return ""
+    keep: list[str] = []
+    for raw in text.splitlines():
+        trimmed = raw.strip()
+        if not trimmed or _SEPARATOR_ONLY.match(trimmed):
+            continue
+        keep.append(trimmed)
+    tail = keep[-_FALLBACK_MAX_VIOLATIONS:]
+    return " ".join(tail)[:_FALLBACK_MAX_DESC]
 
 
 # ---------------------------------------------------------------------------
@@ -1991,8 +2142,12 @@ def _format_blocked_stderr(result: dict) -> str:
     """Render a blocked pipeline result as agent-readable text for stderr."""
     lines = ["AGENTIC LINT -- blocked. Fix these before proceeding:", ""]
     for v in result.get("violations", []):
-        line_repr = v.get("line") if v.get("line") is not None else "?"
-        lines.append(f"- [{v['rule']}] line {line_repr}: {v['description']}")
+        line = v.get("line")
+        if line is None:
+            header = f"- [{v['rule']}]: {v['description']}"
+        else:
+            header = f"- [{v['rule']}] line {line}: {v['description']}"
+        lines.append(header)
         if v.get("suggestion"):
             lines.append(f"  suggestion: {v['suggestion']}")
     passed = result.get("passed", [])
@@ -2156,6 +2311,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="With --validate: run each script rule against empty input to catch "
         "shell/regex-level errors (unbalanced parens, missing commands) at config time.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="For CI-style callers. Exit non-zero on any non-'pass' status "
+        "(untrusted, blocked, config error). Default is advisory: untrusted "
+        "exits 0 so the PostToolUse hook never blocks edits on infra issues.",
     )
     args = parser.parse_args(argv)
     # Back-compat: accept positional args (used by hook)
@@ -2706,10 +2868,12 @@ def main() -> None:
                 result.get("trust_detail", ""),
             )
         )
-        sys.exit(0)
+        sys.exit(3 if args.strict else 0)
     if result.get("status") == "blocked":
         sys.stderr.write(_format_blocked_stderr(result))
         sys.exit(2)
+    if args.strict and result.get("status") not in (None, "pass", "evaluate"):
+        sys.exit(3)
 
 
 if __name__ == "__main__":

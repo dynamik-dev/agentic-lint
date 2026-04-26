@@ -5,6 +5,22 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+### Fixed
+- **Script output parser swallowed errors from tools with columnar or wrapped output.** A live user report on a Laravel package showed phpstan's indented table produced a single `line ?:` violation whose description was 500 chars of separator noise truncated mid-identifier (`"🪪  mis"`). Root cause: `parse_script_output` matched regexes without per-line lstrip, so indented rows fell into the unmatched bucket, then the entire unmatched output was joined and head-truncated to 500 chars — eating the preamble and dropping the signal.
+  - Per-line lstrip before regex match so `  11     Method Foo::bar()...` matches `_LINE_CONTENT`.
+  - Stateful continuation-joining: a numbered line opens a violation; following unnumbered, non-separator lines concatenate onto its description (captures phpstan/pest/psalm wrapped messages).
+  - Table separator rows (`----`, `====`, `____`) dropped before parsing.
+  - When nothing parses, the *tail* of unmatched lines is preserved as up to 20 individual violations (each capped at 500 chars) instead of a single head-truncated blob.
+  - Stderr is now parsed too. Numbered results from either stream are preferred; tails are combined across streams as a last resort.
+  - End-to-end: phpstan output that previously produced `1 violation, line=None, description="------ ... Illuminate\\Database\\El"` now produces `3 violations, line=11, line=11, line=18, description=<full error text>`.
+
+### Added
+- **`output: passthrough` rule field.** Escape hatch for tools whose output format defies the continuation heuristic. Skips structured parsing and emits one violation carrying the tail of stdout+stderr. Opt-in per rule; default unchanged.
+- **`bully lint --strict` flag.** For CI callers. Exit non-zero on any non-pass status (untrusted, config error). Default posture stays advisory (exit 0 on untrusted) so the PostToolUse hook never blocks edits on infra issues. Exit codes: 0 pass, 2 blocked, 3 strict-only non-pass.
+
+### Changed
+- **Violation rendering in blocked stderr drops the `line ?:` placeholder.** When a violation has no line number, the header is `- [rule]: description` instead of `- [rule] line ?: description`. Removes a rough edge on script rules that run whole-file tools and can't attribute a specific line.
+
 ## [0.6.0] - 2026-04-23
 ### Changed
 - **`bully-init` hardened against real-world config hallucinations.** Based on a live install transcript where the skill wrote a `.bully.yml` with a hallucinated `telemetry:` top-level key and `exclude:` list (the real key is `skip`), then spent output budget explaining a PostToolUse `[FAIL]` line that's a known false positive for plugin installs.
