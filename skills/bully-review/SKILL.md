@@ -36,10 +36,10 @@ Add `--config .bully.yml --json` when you need structured output to reason over.
 
 ## Step 2: Classify
 
-The analyzer returns three buckets plus a `by_rule` table with `fires`, `passes`, `evaluate_requested`, `mean_latency_ms`, `files_touched`, and `violation_rate`.
+The analyzer returns three buckets plus a `by_rule` table with `fires`, `passes`, `evaluate_requested`, `skipped`, `mean_latency_ms`, `files_touched`, and `violation_rate`.
 
 - **noisy**: violation rate above threshold. Rule is too broad or the codebase is systemically at odds with it.
-- **dead**: zero hits in the log window (script rules only -- see gap above).
+- **dead**: zero hits in the log window (both script and semantic).
 - **slow**: mean latency above threshold. Usually external shell-outs (PHPStan, ESLint, Pint).
 
 ## Step 3: Recommend

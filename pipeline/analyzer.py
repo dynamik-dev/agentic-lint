@@ -31,6 +31,17 @@ def _read_log(log_path: str) -> list[dict]:
         return []
 
 
+def _new_bucket() -> dict:
+    return {
+        "fires": 0,
+        "passes": 0,
+        "evaluate_requested": 0,
+        "skipped": 0,
+        "latencies": [],
+        "files": set(),
+    }
+
+
 def analyze(
     log_path: str,
     config_path: str,
@@ -47,17 +58,7 @@ def analyze(
     rules = parse_config(config_path)
     configured_ids = {r.id for r in rules}
 
-    by_rule: dict[str, dict] = {
-        rid: {
-            "fires": 0,
-            "passes": 0,
-            "evaluate_requested": 0,
-            "skipped": 0,
-            "latencies": [],
-            "files": set(),
-        }
-        for rid in configured_ids
-    }
+    by_rule: dict[str, dict] = {rid: _new_bucket() for rid in configured_ids}
 
     for rec in records:
         rec_type = rec.get("type")
@@ -67,17 +68,7 @@ def analyze(
             rid = rec.get("rule")
             if rid is None:
                 continue
-            bucket = by_rule.setdefault(
-                rid,
-                {
-                    "fires": 0,
-                    "passes": 0,
-                    "evaluate_requested": 0,
-                    "skipped": 0,
-                    "latencies": [],
-                    "files": set(),
-                },
-            )
+            bucket = by_rule.setdefault(rid, _new_bucket())
             verdict = rec.get("verdict")
             if verdict == "violation":
                 bucket["fires"] += 1
@@ -91,17 +82,7 @@ def analyze(
             rid = rec.get("rule")
             if rid is None:
                 continue
-            bucket = by_rule.setdefault(
-                rid,
-                {
-                    "fires": 0,
-                    "passes": 0,
-                    "evaluate_requested": 0,
-                    "skipped": 0,
-                    "latencies": [],
-                    "files": set(),
-                },
-            )
+            bucket = by_rule.setdefault(rid, _new_bucket())
             bucket["skipped"] += 1
             if file_:
                 bucket["files"].add(file_)
@@ -112,17 +93,7 @@ def analyze(
             rid = rr.get("id")
             if rid is None:
                 continue
-            bucket = by_rule.setdefault(
-                rid,
-                {
-                    "fires": 0,
-                    "passes": 0,
-                    "evaluate_requested": 0,
-                    "skipped": 0,
-                    "latencies": [],
-                    "files": set(),
-                },
-            )
+            bucket = by_rule.setdefault(rid, _new_bucket())
             verdict = rr.get("verdict")
             if verdict == "violation":
                 bucket["fires"] += 1
