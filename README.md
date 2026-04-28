@@ -230,6 +230,14 @@ bully show-resolved-config                      # rules after extends:
 
 `bully` is the console script installed by `pip install -e .`. If you can't install the package, call the pipeline directly: `python3 ~/.bully/pipeline/pipeline.py --validate` (or with `--file`, `--show-resolved-config`, etc.).
 
+### Scoped feedforward
+
+Bully's per-edit feedback is the loud half of the loop. The quiet half -- what the agent should know *before* writing -- is exposed as scoped feedforward, not a generated manual:
+
+- `bully guide path/to/file` -- show every rule whose scope matches the file, with descriptions.
+- `bully explain path/to/file` -- show every rule and whether/why it matches.
+- `bully session-start` -- one-line banner used by the SessionStart hook. Wire it via `hooks/hooks.json`; it prints "bully active, N rules configured. Run `bully guide <file>` to see rules in scope."
+
 ## Uninstall
 
 Plugin install:

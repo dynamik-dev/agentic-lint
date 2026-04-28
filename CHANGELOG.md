@@ -5,6 +5,11 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## 0.9.0 — 2026-04-28
+
+- NEW: `bully guide <file>` and `bully explain <file>` for scoped feedforward -- show rules that apply to a specific file on demand, no generated manual.
+- NEW: `bully session-start` and wired `SessionStart` hook entry -- agents see a tiny "bully active, N rules" banner at session boot.
+
 ## 0.8.0 — 2026-04-28
 
 - BREAKING (subagent capability): the bully-evaluator subagent no longer has `Read`, `Grep`, or `Glob` tools. The diff is the only evidence by default. Closes prompt-injection layer 2 of 3.

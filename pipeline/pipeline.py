@@ -2906,6 +2906,108 @@ def _cmd_baseline_init(config_path: str | None, glob: str | None) -> int:
     return 0
 
 
+# ---- scoped feedforward (guide / explain / session-start) ----
+
+
+def _cmd_guide(config_path: str | None, file_path: str) -> int:
+    """List rules whose scope matches `file_path`, with descriptions."""
+    path = config_path or ".bully.yml"
+    if not os.path.exists(path):
+        print(f"No bully config found at {path}.", file=sys.stderr)
+        return 1
+    try:
+        rules = parse_config(path)
+    except ConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    matched = filter_rules(rules, file_path)
+    if not matched:
+        print(f"No bully rules apply to {file_path}.")
+        return 0
+    print(f"Rules in scope for {file_path} ({len(matched)}):")
+    for r in matched:
+        print(f"\n  [{r.severity}] {r.id} ({r.engine})")
+        for line in r.description.splitlines():
+            print(f"      {line}")
+    return 0
+
+
+def _cmd_guide_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="bully guide",
+        description="Show rules in scope for a file.",
+    )
+    parser.add_argument("file", help="Path to a file (relative to cwd).")
+    parser.add_argument("--config", default=None, help="Path to .bully.yml")
+    args = parser.parse_args(argv)
+    return _cmd_guide(args.config, args.file)
+
+
+def _cmd_explain_subcommand(config_path: str | None, file_path: str) -> int:
+    """Show every rule and whether/why it matches `file_path`.
+
+    Distinct from the existing `--explain` flag (which prints per-rule
+    pipeline verdicts after running the pipeline). This subcommand inspects
+    only scope and prints which globs matched.
+    """
+    path = config_path or ".bully.yml"
+    if not os.path.exists(path):
+        print(f"No bully config found at {path}.", file=sys.stderr)
+        return 1
+    try:
+        rules = parse_config(path)
+    except ConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(f"Match analysis for {file_path}:")
+    for r in rules:
+        scopes = list(r.scope) if r.scope else ["**"]
+        matched_globs = [pat for pat in scopes if _scope_glob_matches(pat, file_path)]
+        if matched_globs:
+            print(f"  MATCH  {r.id}  via {matched_globs}")
+        else:
+            print(f"  skip   {r.id}  scope={scopes}")
+    return 0
+
+
+def _cmd_explain_subcommand_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="bully explain",
+        description="Show why each rule matches or skips a file. "
+        "Distinct from the `--explain` flag, which prints per-rule pipeline "
+        "verdicts after running the pipeline.",
+    )
+    parser.add_argument("file", help="Path to a file (relative to cwd).")
+    parser.add_argument("--config", default=None, help="Path to .bully.yml")
+    args = parser.parse_args(argv)
+    return _cmd_explain_subcommand(args.config, args.file)
+
+
+def _cmd_session_start(config_path: str | None) -> int:
+    """Tiny banner: 'bully active, N rules configured. Use `bully guide <file>`'."""
+    path = config_path or ".bully.yml"
+    if not Path(path).is_file():
+        return 0  # silent -- bully not configured here
+    try:
+        rules = parse_config(path)
+    except Exception:
+        return 0  # silent on broken config; the PostToolUse path will surface it
+    if not rules:
+        return 0
+    print(
+        f"bully active. {len(rules)} rules configured. "
+        f"Run `bully guide <file>` to see rules that apply to a specific file."
+    )
+    return 0
+
+
+def _cmd_session_start_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="bully session-start")
+    parser.add_argument("--config", default=None, help="Path to .bully.yml")
+    args = parser.parse_args(argv)
+    return _cmd_session_start(args.config)
+
+
 # ---- hook-mode + main ----
 
 
@@ -2994,12 +3096,21 @@ def _hook_mode() -> int:
 
 
 def main() -> None:
-    # Short-circuit: `bully bench ...` dispatches to the bench CLI directly,
-    # bypassing the main parser (which uses a flat flag model).
+    # Subcommand short-circuits (positional dispatch). These bypass the main
+    # parser, which uses a flat flag model, so positional commands don't get
+    # rejected and the new `bully explain <file>` subcommand doesn't collide
+    # with the existing `--explain` flag (which prints per-rule pipeline
+    # verdicts after running the pipeline -- a different operation).
     if len(sys.argv) >= 2 and sys.argv[1] == "bench":
         from pipeline.bench import main as bench_main
 
         sys.exit(bench_main(sys.argv[2:]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "guide":
+        sys.exit(_cmd_guide_main(sys.argv[2:]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "explain":
+        sys.exit(_cmd_explain_subcommand_main(sys.argv[2:]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "session-start":
+        sys.exit(_cmd_session_start_main(sys.argv[2:]))
 
     args = _parse_args(sys.argv[1:])
 
