@@ -128,9 +128,6 @@ class Rule:
     # the dispatcher reads N lines around each diff hunk and surfaces them
     # to the evaluator subagent as `<EXCERPT_FOR_RULE>` inside UNTRUSTED_EVIDENCE.
     context: dict | None = None
-    # Reserved for PR 5: per-rule tool capability declarations. Forward-declared
-    # here so that adding the field later does not require a config-schema bump.
-    capabilities: dict | None = None
 
 
 @dataclass
