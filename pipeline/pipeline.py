@@ -23,6 +23,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
 
+# Pinned by `release-bully` alongside .claude-plugin/plugin.json and
+# pyproject.toml. Stamped into the `session_init` telemetry record so the
+# analyzer can attribute records back to the producer version. Bump this
+# whenever you bump the project version.
+BULLY_VERSION = "0.8.0"
+TELEMETRY_SCHEMA_VERSION = 1
+
 # ---------------------------------------------------------------------------
 # Config schema + parser
 # ---------------------------------------------------------------------------
@@ -3089,7 +3096,12 @@ def _cmd_explain_subcommand_main(argv: list[str]) -> int:
 
 
 def _cmd_session_start(config_path: str | None) -> int:
-    """Tiny banner: 'bully active, N rules configured. Use `bully guide <file>`'."""
+    """Tiny banner: 'bully active, N rules configured. Use `bully guide <file>`'.
+
+    Also writes a `session_init` telemetry record stamping the producer
+    version + schema version, so analyzer/forensics can attribute later
+    records to a specific bully release.
+    """
     path = config_path or ".bully.yml"
     if not Path(path).is_file():
         return 0  # silent -- bully not configured here
@@ -3103,6 +3115,18 @@ def _cmd_session_start(config_path: str | None) -> int:
         f"bully active. {len(rules)} rules configured. "
         f"Run `bully guide <file>` to see rules that apply to a specific file."
     )
+    log_path = _telemetry_path(path)
+    if log_path is not None:
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "type": "session_init",
+            "bully_version": BULLY_VERSION,
+            "schema_version": TELEMETRY_SCHEMA_VERSION,
+        }
+        try:
+            _append_record(log_path, record)
+        except OSError:
+            pass  # best-effort; telemetry writes never block session start
     return 0
 
 

@@ -130,6 +130,21 @@ Before dispatching the evaluator the pipeline applies cheap "can't possibly matc
 
 `semantic_verdict` depends on the `bully` skill being up to date — older versions do not call `--log-verdict`. If verdict records are missing for known-firing semantic rules, update the skill or bypass the evaluator manually (`bully --log-verdict` is a plain CLI). `semantic_skipped` is pipeline-side and independent of the skill.
 
+## Session init records
+
+`SessionStart` writes one stamp per Claude Code session:
+
+```json
+{
+  "ts": "2026-04-28T14:00:00Z",
+  "type": "session_init",
+  "bully_version": "0.8.0",
+  "schema_version": 1
+}
+```
+
+`bully_version` is the producer (the bully release that emitted the surrounding records), `schema_version` is the telemetry schema version (currently `1`). Records between two `session_init` entries came from the version named in the earlier of the two — useful when reading older logs after a bully upgrade has changed record shape.
+
 ## Running the analyzer
 
 ```bash

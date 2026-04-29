@@ -24,14 +24,15 @@ Bully is a Claude Code plugin. Claude Code detects updates by comparing the `ver
 | `.claude-plugin/marketplace.json` | root | `metadata.version` |
 | `.claude-plugin/marketplace.json` | first plugin entry | `plugins[0].version` |
 | `pyproject.toml` | `[project]` table | `version` |
+| `pipeline/pipeline.py` | top of file | `BULLY_VERSION = "..."` (stamped into `session_init` telemetry records) |
 
 Drift between these is the most common release bug. Grep to verify after editing:
 
 ```bash
-grep -RnE '"version"|^version' .claude-plugin/ pyproject.toml
+grep -RnE '"version"|^version|^BULLY_VERSION' .claude-plugin/ pyproject.toml pipeline/pipeline.py
 ```
 
-All four lines must show the new version.
+All five lines must show the new version.
 
 ## Workflow
 
