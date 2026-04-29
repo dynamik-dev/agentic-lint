@@ -3144,6 +3144,15 @@ def _cmd_session_record(config_path: str | None, file_path: str) -> int:
     """Append `file_path` to the cumulative session changed-set."""
     path = config_path or ".bully.yml"
     cfg_abs = Path(path).resolve()
+    # Trust gate: refuse to touch .bully/ for an un-reviewed config. The hook
+    # caller wraps this in `try/except: pass`, so a silent return 0 is the
+    # right shape -- run_pipeline (called next) will surface the untrusted
+    # message via _untrusted_stderr.
+    if not cfg_abs.is_file():
+        return 0
+    trust_status, _ = _trust_status(str(cfg_abs))
+    if trust_status != "trusted":
+        return 0
     bully_dir = cfg_abs.parent / ".bully"
     bully_dir.mkdir(exist_ok=True)
     session_file = bully_dir / "session.jsonl"
@@ -3176,6 +3185,14 @@ def _cmd_stop(config_path: str | None) -> int:
     path = config_path or ".bully.yml"
     cfg_abs = Path(path).resolve()
     if not cfg_abs.is_file():
+        return 0
+    # Trust gate: refuse to parse rules or block on session-rule violations
+    # for an un-reviewed config. Print the same friendly message the
+    # PostToolUse hook emits so the user knows why nothing happened, then
+    # return 0 (never block).
+    trust_status, trust_detail = _trust_status(str(cfg_abs))
+    if trust_status != "trusted":
+        sys.stderr.write(_untrusted_stderr(str(cfg_abs), trust_status, trust_detail))
         return 0
     bully_dir = cfg_abs.parent / ".bully"
     session_file = bully_dir / "session.jsonl"
