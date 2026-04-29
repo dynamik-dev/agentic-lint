@@ -24,11 +24,24 @@ from pipeline import parse_config  # noqa: E402
 
 
 def _read_log(log_path: str) -> list[dict]:
+    # Skip corrupt or non-dict lines so a single bad record does not crash
+    # `bully review` -- the very tool users reach for when telemetry is messy.
+    records: list[dict] = []
     try:
         with open(log_path) as f:
-            return [json.loads(line) for line in f if line.strip()]
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    rec = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(rec, dict):
+                    records.append(rec)
     except FileNotFoundError:
         return []
+    return records
 
 
 def _new_bucket() -> dict:
