@@ -3222,10 +3222,10 @@ def _cmd_coverage(config_path: str | None, as_json: bool) -> int:
                 if isinstance(file_, str):
                     seen_files.add(file_)
 
-    files_report = {
-        f: {"rules_in_scope": len(rules_for(f)), "rule_ids": rules_for(f)}
-        for f in sorted(seen_files)
-    }
+    files_report: dict[str, dict] = {}
+    for f in sorted(seen_files):
+        rids = rules_for(f)
+        files_report[f] = {"rules_in_scope": len(rids), "rule_ids": rids}
     uncovered = [f for f, r in files_report.items() if r["rules_in_scope"] == 0]
 
     summary = {

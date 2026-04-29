@@ -97,4 +97,4 @@ rules:
     p = _run(["coverage"], tmp_path)
     assert p.returncode == 0
     assert "src/foo.ts" in p.stdout
-    assert "0 rules" in p.stdout or "uncovered" in p.stdout.lower()
+    assert "Uncovered files" in p.stdout
