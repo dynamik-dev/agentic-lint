@@ -8,6 +8,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIPELINE = REPO_ROOT / "pipeline" / "pipeline.py"
 
+sys.path.insert(0, str(REPO_ROOT / "pipeline"))
+
+from pipeline import parse_config  # noqa: E402
+
 
 def _run(args: list[str], cwd: Path, env: dict | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -34,10 +38,7 @@ rules:
       changed_any: ['tests/**auth**']
 """
     )
-    sys.path.insert(0, str(REPO_ROOT / "pipeline"))
-    import pipeline as pipeline_mod
-
-    rules = pipeline_mod.parse_config(str(cfg))
+    rules = parse_config(str(cfg))
     rule = next(r for r in rules if r.id == "auth-needs-tests")
     assert rule.engine == "session"
     assert rule.when == {"changed_any": ["src/auth/**"]}
