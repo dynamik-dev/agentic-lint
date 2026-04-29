@@ -112,6 +112,18 @@ Keep lint, format, and typecheck as **separate** passthrough rules -- failure mo
 
 Never write a rule to `.bully.yml` without running this protocol first.
 
+### Binary resolution
+
+Plugin installs don't put `bully` on `$PATH`. Resolve it once at the top of the protocol and use `$BULLY` in every command below:
+
+```bash
+BULLY=$(command -v bully 2>/dev/null || ls -d ~/.claude/plugins/cache/*/bully/*/bully 2>/dev/null | sort -V | tail -1)
+```
+
+If `$BULLY` is empty, fall back to `python3 ~/.bully/pipeline/pipeline.py` for manual installs.
+
+### Steps
+
 1. Create two fixture files with the Write tool:
    - `/tmp/bully-probe-violating.<ext>` -- must trigger the rule.
    - `/tmp/bully-probe-clean.<ext>` -- must not trigger.
@@ -120,39 +132,44 @@ Never write a rule to `.bully.yml` without running this protocol first.
    cp .bully.yml /tmp/bully-draft.yml
    ```
 3. Edit `/tmp/bully-draft.yml` to append the proposed rule.
-4. Run the pipeline with `--rule` against each fixture:
+4. **Trust the draft** so script and ast rules will actually execute. Untrusted configs return `status: untrusted` with rules silently skipped, so this step is what makes the lint result meaningful:
+   ```bash
+   $BULLY --trust --config /tmp/bully-draft.yml
+   ```
+   Use `--trust --refresh` instead if you re-edit the draft after this step (each edit invalidates the trust seal).
+5. Run the pipeline with `--rule` against each fixture:
    ```bash
    # Script rule -- violating must exit 2, clean must exit 0
-   bully lint /tmp/bully-probe-violating.<ext> \
+   $BULLY --file /tmp/bully-probe-violating.<ext> \
      --config /tmp/bully-draft.yml \
      --rule <new-rule-id>
 
-   bully lint /tmp/bully-probe-clean.<ext> \
+   $BULLY --file /tmp/bully-probe-clean.<ext> \
      --config /tmp/bully-draft.yml \
      --rule <new-rule-id>
    ```
-5. For **semantic rules**, use `--print-prompt` instead of asserting exit codes. Read the rendered prompt and confirm it would correctly judge both fixtures. If unclear, sharpen the description and re-test.
+6. For **semantic rules**, use `--print-prompt` instead of asserting exit codes. Read the rendered prompt and confirm it would correctly judge both fixtures. If unclear, sharpen the description and re-test.
 
    Then run `--explain` against the violating fixture to confirm the rule is actually being dispatched, not silently dropped by the can't-match heuristics:
 
    ```bash
-   bully lint /tmp/bully-probe-violating.<ext> \
+   $BULLY --file /tmp/bully-probe-violating.<ext> \
      --config /tmp/bully-draft.yml \
      --rule <new-rule-id> \
      --explain
    ```
 
    The line for `<new-rule-id>` must show `dispatched`, not `skipped (empty-diff)` or `skipped (too-few-added-lines)`. If skipped, add lines to the fixture or supply a `--diff` that has more added lines.
-6. For **ast rules**, the same exit-code protocol as script rules: violating must exit 2, clean must exit 0. Additionally verify the pattern directly with ast-grep before writing to the draft:
+7. For **ast rules**, the same exit-code protocol as script rules: violating must exit 2, clean must exit 0. Additionally verify the pattern directly with ast-grep before writing to the draft:
    ```bash
    ast-grep run --pattern '<pattern>' --lang <ts|csharp|php|…> /tmp/bully-probe-violating.<ext>
    ast-grep run --pattern '<pattern>' --lang <ts|csharp|php|…> /tmp/bully-probe-clean.<ext>
    ```
    The first invocation must print at least one match; the second must print nothing.
-7. Only on pass, proceed to the write step.
-8. Clean up: `rm -f /tmp/bully-probe-*.* /tmp/bully-draft.yml`.
+8. Only on pass, proceed to the write step.
+9. Clean up: `rm -f /tmp/bully-probe-*.* /tmp/bully-draft.yml`.
 
-Invariants: fixtures exist before testing; both violating and compliant fixtures (or `--print-prompt`) are exercised; the draft config is used, not the real one; exit codes match expectations before writing.
+Invariants: fixtures exist before testing; both violating and compliant fixtures (or `--print-prompt`) are exercised; the draft is trusted before linting; the draft config is used, not the real one; exit codes match expectations before writing.
 
 ## YAML edit pattern for `.bully.yml`
 
@@ -181,9 +198,9 @@ The parser is fixed-indent. Do not reformat the file.
 2. Collect `id` (kebab-case, unique), `description`, `engine`, `scope`, `severity`, plus `script` (script and linter-passthrough rules), `pattern` + optional `language` (ast rules), or no extra field (semantic rules).
 3. Run the fixture-testing protocol.
 4. Edit `.bully.yml` to append the rule. For linter passthroughs, also edit the linter's config in the same step and show both diffs before writing.
-5. Sanity-check against 2-3 existing project files:
+5. Sanity-check against 2-3 existing project files (use the `$BULLY` you resolved during the protocol; re-resolve with the one-liner above if running in a fresh shell):
    ```bash
-   bully lint <existing-file> --rule <new-rule-id>
+   $BULLY --file <existing-file> --rule <new-rule-id> --config .bully.yml
    ```
    In this repo, also run `bash scripts/dogfood.sh`. If the rule mass-flags the codebase, narrow it or treat the flags as real cleanup.
 6. Report and invite the user to review before committing.
@@ -208,11 +225,11 @@ The parser is fixed-indent. Do not reformat the file.
    ```
    Noisy != dead. If the rule has fired recently, challenge the removal and propose tightening.
 2. Delete from `  <rule-id>:` through the last field line of that block.
-3. Sanity-check:
+3. Sanity-check (re-resolve `$BULLY` with the one-liner from the fixture-testing protocol if needed):
    ```bash
    bash scripts/dogfood.sh
    # or
-   bully lint <existing-file>
+   $BULLY --file <existing-file> --config .bully.yml
    ```
 
 ## Applying review recommendations

@@ -1,0 +1,23 @@
+schema_version: 1
+
+rules:
+  no-db-facade:
+    description: "Use repository classes, not the DB facade."
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -nE 'DB::table\\(' {file} && exit 1 || exit 0"
+
+  no-bare-except:
+    description: "No bare `except:` -- catch specific exception classes."
+    engine: script
+    scope: "*.py"
+    severity: error
+    script: "grep -nE '^[[:space:]]*except:[[:space:]]*$' {file} && exit 1 || exit 0"
+
+  ruff-clean:
+    description: "Code must pass ruff check."
+    engine: script
+    scope: "*.py"
+    severity: error
+    script: "ruff check --quiet {file}"

@@ -1,0 +1,23 @@
+{
+  "file": "src/Migrations/2026_04_01_create_orders_table.php",
+  "diff": "--- a/src/Migrations/2026_04_01_create_orders_table.php\n+++ b/src/Migrations/2026_04_01_create_orders_table.php\n@@ -1,5 +1,40 @@\n <?php\n use Illuminate\\Support\\Facades\\Schema;\n use Illuminate\\Database\\Schema\\Blueprint;\n use Illuminate\\Database\\Migrations\\Migration;\n+use App\\Services\\OrderImporter;\n+\n+class CreateOrdersTable extends Migration\n+{\n+    public function up(): void\n+    {\n+        Schema::create('orders', function (Blueprint $table) {\n+            $table->id();\n+            $table->string('reference');\n+            $table->decimal('total', 10, 2);\n+            $table->timestamps();\n+        });\n+\n+        // Backfill from legacy table\n+        DB::table('legacy_orders')->each(function ($row) {\n+            DB::table('orders')->insert([\n+                'reference' => $row->ref,\n+                'total'     => $row->amt,\n+            ]);\n+        });\n+\n+        $importer = new OrderImporter();\n+        $importer->run();\n+    }\n+\n+    public function down(): void\n+    {\n+        Schema::dropIfExists('orders');\n+    }\n+}",
+  "passed_checks": ["no-compact"],
+  "evaluate": [
+    {
+      "id": "no-inline-single-use",
+      "description": "Inline a variable that is used only once.",
+      "severity": "warning"
+    },
+    {
+      "id": "idempotent-migration",
+      "description": "Migrations must be safely re-runnable. Use `Schema::hasTable` before `create`, or document why not.",
+      "severity": "error"
+    },
+    {
+      "id": "no-db-facade",
+      "description": "Use repository classes, not the DB facade.",
+      "severity": "error"
+    }
+  ],
+  "_evaluator_input": "SEMANTIC EVALUATION REQUIRED\n\n<TRUSTED_POLICY>\nRule: no-inline-single-use (severity: warning)\n  Inline a variable that is used only once.\n\nRule: idempotent-migration (severity: error)\n  Migrations must be safely re-runnable. Use `Schema::hasTable` before `create`, or document why not.\n\nRule: no-db-facade (severity: error)\n  Use repository classes, not the DB facade.\n</TRUSTED_POLICY>\n\n<UNTRUSTED_EVIDENCE>\nFile: src/Migrations/2026_04_01_create_orders_table.php\n\nDiff:\n--- a/src/Migrations/2026_04_01_create_orders_table.php\n+++ b/src/Migrations/2026_04_01_create_orders_table.php\n@@ -1,5 +1,40 @@\n <?php\n use Illuminate\\Support\\Facades\\Schema;\n use Illuminate\\Database\\Schema\\Blueprint;\n use Illuminate\\Database\\Migrations\\Migration;\n+use App\\Services\\OrderImporter;\n+\n+class CreateOrdersTable extends Migration\n+{\n+    public function up(): void\n+    {\n+        Schema::create('orders', function (Blueprint $table) {\n+            $table->id();\n+            $table->string('reference');\n+            $table->decimal('total', 10, 2);\n+            $table->timestamps();\n+        });\n+\n+        DB::table('legacy_orders')->each(function ($row) {\n+            DB::table('orders')->insert([\n+                'reference' => $row->ref,\n+                'total'     => $row->amt,\n+            ]);\n+        });\n+\n+        $importer = new OrderImporter();\n+        $importer->run();\n+    }\n+}\n</UNTRUSTED_EVIDENCE>\n"
+}

@@ -1,0 +1,9 @@
+schema_version: 1
+
+rules:
+  no-console-log:
+    description: "No console.log in committed code."
+    engine: script
+    scope: ["*.ts", "*.tsx"]
+    severity: error
+    script: "grep -nE 'console\\.log\\(' {file} && exit 1 || exit 0"

@@ -1,0 +1,10 @@
+[project]
+name = "example"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.uv]
+dev-dependencies = [
+    "black>=24.0.0",
+    "ruff>=0.6.0",
+]

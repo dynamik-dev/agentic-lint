@@ -1,0 +1,57 @@
+{
+  "skill_name": "bully",
+  "evals": [
+    {
+      "id": 1,
+      "name": "blocked-stderr-fix",
+      "prompt": "You just performed an Edit on evals/files/blocked-stderr/target.php. The PostToolUse hook returned the following stderr (exit code 2):\n\n```\nAGENTIC LINT -- blocked. Fix these before proceeding:\n\n- [no-compact] line 6: return compact('result');\n\nPassed checks: no-db-facade\n```\n\nThe target file is at evals/files/blocked-stderr/target.php. Proceed.",
+      "expected_output": "The compact() violation on line 6 of target.php is fixed via Edit. No other tool calls precede the fix.",
+      "files": [
+        "evals/files/blocked-stderr/target.php",
+        "evals/files/blocked-stderr/payload.txt"
+      ],
+      "expectations": [
+        "The Edit tool was used on evals/files/blocked-stderr/target.php to remove or replace the `compact(` call on line 6",
+        "The first action after reading the hook output was to fix the violation (no unrelated tool calls before the Edit)",
+        "The final state of target.php contains no `compact(` call"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "semantic-inline-single-rule",
+      "prompt": "You just performed an Edit. The PostToolUse hook returned this hookSpecificOutput.additionalContext:\n\n```\nAGENTIC LINT SEMANTIC EVALUATION REQUIRED:\n\n<paste the JSON from evals/files/inline-single-rule/payload.json here>\n```\n\nThe payload is at evals/files/inline-single-rule/payload.json — read it and proceed.",
+      "expected_output": "Inline judgment (no Agent dispatch) because the diff is short and there is only one rule. Telemetry logged.",
+      "files": ["evals/files/inline-single-rule/payload.json"],
+      "expectations": [
+        "The Agent tool was NOT called with subagent_type=bully-evaluator (no dispatch)",
+        "A Bash invocation of `bully --log-verdict --rule <rule-id> --verdict <pass|violation> --file <path>` was made for the single rule in the payload",
+        "The final response either applies a fix (if the inline judgment found a violation) or notes no violation found"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "semantic-multi-rule-dispatch",
+      "prompt": "You just performed an Edit. The PostToolUse hook returned this hookSpecificOutput.additionalContext from evals/files/multi-rule-dispatch/payload.json. Read it and proceed.",
+      "expected_output": "The bully-evaluator subagent is dispatched with the verbatim _evaluator_input string. Telemetry is logged for all three rules.",
+      "files": ["evals/files/multi-rule-dispatch/payload.json"],
+      "expectations": [
+        "The Agent tool was called with subagent_type=bully-evaluator",
+        "The `prompt` argument to the Agent call equals the verbatim `_evaluator_input` string from the payload — it was NOT re-serialized as a JSON object containing the full payload",
+        "The Agent prompt argument contains the substrings `<TRUSTED_POLICY>` and `<UNTRUSTED_EVIDENCE>` (confirming it's the pre-formatted evaluator input, not a JSON dump)",
+        "Three Bash `--log-verdict` invocations were made — one per rule in the `evaluate[]` array of the payload"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "passed-checks-not-reinvestigated",
+      "prompt": "You just performed an Edit. The PostToolUse hook returned this hookSpecificOutput.additionalContext from evals/files/passed-checks/payload.json. Read it and proceed.",
+      "expected_output": "Rules listed in `passed_checks` are not re-investigated; only rules in `evaluate[]` are evaluated.",
+      "files": ["evals/files/passed-checks/payload.json"],
+      "expectations": [
+        "Any subagent dispatch or inline judgment touched only the rules in the payload's `evaluate[]` array",
+        "Rules listed under `passed_checks` in the payload were NOT independently re-evaluated (no fixture testing, no dispatch focused on them)",
+        "If telemetry was logged, it was logged only for rules in `evaluate[]`, not for `passed_checks` entries"
+      ]
+    }
+  ]
+}

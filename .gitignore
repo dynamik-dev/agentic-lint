@@ -14,3 +14,6 @@ build/
 dist/
 *.egg-info/
 .ruff_cache/
+
+# Eval harness workspace
+bench/eval-runs/

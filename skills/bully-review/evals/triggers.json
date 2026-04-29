@@ -1,0 +1,12 @@
+[
+  {"query": "review my lint rules", "should_trigger": true},
+  {"query": "which rules are noisy?", "should_trigger": true},
+  {"query": "find dead lint rules", "should_trigger": true},
+  {"query": "audit .bully.yml", "should_trigger": true},
+  {"query": "check rule health", "should_trigger": true},
+  {"query": "bully review", "should_trigger": true},
+  {"query": "init agentic lint", "should_trigger": false},
+  {"query": "add a rule for X", "should_trigger": false},
+  {"query": "the hook blocked me, fix it", "should_trigger": false},
+  {"query": "show me the contents of .bully.yml", "should_trigger": false}
+]

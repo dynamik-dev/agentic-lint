@@ -1,0 +1,9 @@
+schema_version: 1
+
+rules:
+  no-bare-except:
+    description: "No bare `except:` -- catch specific exception classes."
+    engine: script
+    scope: "*.py"
+    severity: error
+    script: "grep -nE '^[[:space:]]*except:[[:space:]]*$' {file} && exit 1 || exit 0"

@@ -1,0 +1,66 @@
+{
+  "skill_name": "bully-review",
+  "evals": [
+    {
+      "id": 1,
+      "name": "noisy-rule-classification",
+      "prompt": "Review lint rule health using the fixture config at evals/files/noisy/.bully.yml and the telemetry log at evals/files/noisy/bully-state/log.jsonl. Pass these explicit paths to the analyzer (--config and --log).",
+      "expected_output": "A punch list that flags the noisy rule and recommends tightening or demoting; no edits to .bully.yml.",
+      "files": [
+        "evals/files/noisy/.bully.yml",
+        "evals/files/noisy/bully-state/log.jsonl"
+      ],
+      "expectations": [
+        "The transcript shows `analyzer.py` was invoked against the fixture log path (evals/files/noisy/bully-state/log.jsonl)",
+        "The final response names the noisy rule (the one with violation_rate above the default 0.5 threshold) in a punch list",
+        "The recommendation for the noisy rule is to tighten the pattern, narrow the scope, or demote severity",
+        "The transcript does NOT show a write/edit to evals/files/noisy/.bully.yml",
+        "The final response references handing off to the bully-author skill for application"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "dead-rule-classification",
+      "prompt": "Review lint rule health using evals/files/dead/.bully.yml and evals/files/dead/bully-state/log.jsonl. Pass these explicit paths to the analyzer (--config and --log).",
+      "expected_output": "The dead rule is flagged with a remove-or-recheck-scope recommendation.",
+      "files": [
+        "evals/files/dead/.bully.yml",
+        "evals/files/dead/bully-state/log.jsonl"
+      ],
+      "expectations": [
+        "The final response classifies the dead rule (zero fires in the log) as dead",
+        "The recommendation either suggests removal or recommends checking the scope glob first",
+        "The transcript does NOT show a write/edit to evals/files/dead/.bully.yml"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "slow-rule-classification",
+      "prompt": "Review lint rule health using evals/files/slow/.bully.yml and evals/files/slow/bully-state/log.jsonl. Pass these explicit paths to the analyzer (--config and --log).",
+      "expected_output": "The slow rule is flagged with a cache/CI/scope recommendation.",
+      "files": [
+        "evals/files/slow/.bully.yml",
+        "evals/files/slow/bully-state/log.jsonl"
+      ],
+      "expectations": [
+        "The final response classifies the slow passthrough rule as slow",
+        "The recommendation suggests caching, narrowing scope, demoting severity, or moving to pre-commit/CI",
+        "The transcript does NOT show a write/edit to evals/files/slow/.bully.yml"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "empty-log-refusal",
+      "prompt": "Review lint rule health using evals/files/empty/.bully.yml and evals/files/empty/bully-state/log.jsonl. Pass these explicit paths to the analyzer (--config and --log).",
+      "expected_output": "The skill refuses to classify and tells the user to make edits first.",
+      "files": [
+        "evals/files/empty/.bully.yml",
+        "evals/files/empty/bully-state/log.jsonl"
+      ],
+      "expectations": [
+        "The final response does NOT classify any rule as dead, noisy, or slow",
+        "The final response tells the user to make some edits first or otherwise indicates the log is empty/insufficient"
+      ]
+    }
+  ]
+}

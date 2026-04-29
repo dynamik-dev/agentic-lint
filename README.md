@@ -1,34 +1,87 @@
 <p align="center">
-  <img src="bully.png" alt="Bully claude code tool for linting enforcement" width="500">
+  <img src="bully.png" alt="Bully" width="500" />
+</p>
+
+<h1 align="center">Bully: Lint Rules Claude Code Can't Ignore</h1>
+
+<p align="center">
+  <strong>The edit doesn't land until your lint rules pass.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/dynamik-dev/bully/actions/workflows/ci.yml"><img src="https://github.com/dynamik-dev/bully/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/license-Apache_2.0-green" alt="Apache 2.0">
-  <img src="https://img.shields.io/badge/Claude_Code-plugin-5A67D8" alt="Claude Code plugin">
+  <a href="https://github.com/dynamik-dev/bully/actions/workflows/ci.yml"><img src="https://github.com/dynamik-dev/bully/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/dynamik-dev/bully/releases/latest"><img src="https://img.shields.io/github/v/release/dynamik-dev/bully?label=release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-green" alt="Apache 2.0" /></a>
+  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python 3.10+" />
+  <img src="https://img.shields.io/badge/Claude_Code-plugin-5A67D8" alt="Claude Code plugin" />
 </p>
 
-## A hybrid agent-harness sensor for Claude Code
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="docs/design.md">Design</a> ·
+  <a href="docs/rule-authoring.md">Rule authoring</a> ·
+  <a href="docs/telemetry.md">Telemetry</a>
+</p>
 
-Bully is a repository-local pipeline that runs computational rules (script + AST) and inferential rules (semantic, dispatched to a context-firewalled subagent) on every `Edit` and `Write` -- and at session boundaries (`Stop`) for changed-set rules that no per-edit lint can see. **Errors block the tool call -- Claude can't land the edit until it passes.** Any language; rules are scoped by file glob.
+---
 
-What you get:
+Bully is a `PostToolUse` hook for Claude Code. On every `Edit` and `Write`, it runs your linters (ruff, tsc, eslint, biome, phpstan, clippy, …) and uses an LLM to evaluate plain-English rules against the diff. If anything fails, Claude can't land the edit. Each block feeds the rule back to the agent, so your rules improve its behavior without manual coaching.
 
-- **Two enforcement lanes.** Deterministic checks for things that are unambiguous (a string is forbidden, a function call is dead). LLM evaluation for things that need judgment (single-use variables, ambiguous naming, audit-trail rules).
-- **Subagent context firewall.** Semantic evaluation runs in a read-only subagent (`bully-evaluator`) with no `Read`/`Grep`/`Glob` and explicit trusted-policy / untrusted-evidence boundaries in the prompt. Adversarial diff content cannot redirect the harness.
-- **Scoped feedforward, mechanical feedback.** `bully guide <file>` shows the agent what rules apply *before* it edits. Exit-2 on violation blocks the edit *after*.
-- **Self-pruning telemetry.** `bully-review` and the scheduled `bully-scheduler` agent retire dead rules and downgrade noisy ones automatically -- the cybernetic-governor loop.
-- **Behavior-harness lane.** Session rules (`engine: session`) fire at `Stop` over the cumulative changed-set: "auth changed without tests", "migration without rollback", "API changed without changelog".
-- **Trust-gated, capability-scoped script execution.** `bully trust` is the first gate. Per-rule `capabilities: { network: false, writes: cwd-only }` is the second.
+Read the [Design doc](docs/design.md) for the architecture, data flow, and baseline contract.
 
-Bully is stdlib-only (no runtime deps) and ships as a Claude Code plugin.
+## Install
 
-**Linters are the lawmakers. Bully is the cop.** Your installed tools (ruff, biome, eslint, tsc, phpstan, clippy, …) own what "a violation" means. Bully owns making sure Claude can't slip one past the hook. The question is never *whether* bully enforces -- just where a rule's definition lives.
+```text
+/plugin marketplace add https://github.com/dynamik-dev/bully
+/plugin install bully
+```
 
-## The config
+Restart Claude Code. Then in a project:
 
-A `.bully.yml` is a flat list of rules. Each rule says what to check, where it applies, how bad it is, and which engine runs it -- `script` (shell command, including a passthrough to an installed linter), `ast` (structural pattern via [ast-grep](https://ast-grep.github.io/)), or `semantic` (natural-language rule the agent evaluates against the diff):
+```text
+> /bully-init
+```
+
+`/bully-init` detects your stack, wires your existing linters as passthrough rules, and creates `.bully/` for telemetry. Review the generated `.bully.yml`, tweak, commit.
+
+Manual install, `bully doctor`, model overrides, and uninstall live in [Reference](#reference).
+
+## Quick start
+
+```text
+> /bully-init                  # bootstrap a config from your stack
+> /bully-author                # add a rule (engine routing + fixture test)
+> /bully-review                # prune noisy and dead rules from telemetry
+```
+
+```bash
+bully baseline-init --glob "src/**/*.ts"   # ignore pre-existing violations
+bully guide src/foo.ts                     # which rules apply before editing
+bully lint src/foo.ts --print-prompt       # debug the semantic prompt
+```
+
+Silence one line when a rule is right in general but wrong here:
+
+```ts
+eval(expr); // bully-disable: no-eval reason: sandboxed input
+```
+
+## What Bully does
+
+- **Linter passthrough.** `engine: script` rules call your existing linters as subprocesses (`ruff check --quiet {file}`, `tsc --noEmit`). The same checks CI runs, blocking on every edit.
+- **Structural patterns.** `engine: ast` rules use [ast-grep](https://ast-grep.github.io/) to match shape, not text. Comments, strings, and formatting variants don't fool them.
+- **Prose rules.** `engine: semantic` rules are plain English ("don't derive state with `useEffect`"). The `bully-evaluator` subagent has no `Read` / `Grep` / `Glob` and only sees the diff, so adversarial content can't redirect it.
+- **Session rules.** `engine: session` fires at `Stop` over the cumulative changed-set: "auth changed without tests", "migration without rollback", "API changed without changelog". Catches things no per-edit lint can see.
+- **Trust + capabilities.** bully won't run any rule until you `bully trust` the config. Per-rule `capabilities:` (`network: false`, `writes: cwd-only`) further gate what scripts can do.
+- **Telemetry + review.** Every run appends a JSONL record to `.bully/log.jsonl`. `/bully-review` flags noisy and dead rules; the `bully-scheduler` agent can run on cron and open small PRs to retire them.
+- **Authoring + feedforward.** `/bully-init` bootstraps a config. `/bully-author` adds rules with engine routing and fixture testing. `bully guide <file>` lists rules in scope before the agent edits.
+
+## Configuration
+
+One YAML file at `.bully.yml` in your repo root. A flat list of rules; each names what to check, where it applies, severity, and which engine runs it.
 
 ```yaml
 schema_version: 1
@@ -42,7 +95,7 @@ rules:
     script: "ruff check --quiet {file}"
 
   no-any-cast:
-    description: "No `as any` casts -- use a precise type or `unknown` plus narrowing."
+    description: "No `as any` casts. Use a precise type or `unknown` plus narrowing."
     engine: ast
     scope: ["src/**/*.ts", "src/**/*.tsx"]
     severity: error
@@ -59,100 +112,78 @@ rules:
     severity: warning
 ```
 
-The first rule is a **linter passthrough** -- bully runs `ruff check` on every edited `.py` file and blocks on nonzero exit. Ruff owns *which* checks run (configured in `ruff.toml`); bully owns enforcement on every edit. The second rule matches a structural pattern with ast-grep -- ignores comments, strings, and formatting variants. The third ships the diff to the agent with the description as the evaluation prompt. No plugins, no DSL -- just globs, shell, ast patterns, and prose.
+`/bully-author` routes new rules in priority order: linter passthrough → `engine: ast` → `engine: script` → `engine: semantic`. Sharpest tool first.
 
-### Where rules live (four options, one cop)
-
-When authoring a rule, `/bully-author` routes it in priority order:
-
-1. **Linter passthrough** -- an installed (or reasonably installable) linter can express the rule via a config change. Rule definition lives in the linter's config; `.bully.yml` gets a one-line passthrough (`engine: script`, `script: "<linter> <args> {file}"`).
-2. **`engine: ast`** -- structural pattern no linter covers; `ast-grep` handles comments/strings/formatting correctly.
-3. **`engine: script`** -- textual pattern with no false-positive risk (filename conventions, forbidden imports, required headers).
-4. **`engine: semantic`** -- judgment only an LLM can make ("don't derive state with `useEffect`", "error messages should be actionable").
-
-Engine-wise there are only two lanes -- `script` (bash subprocess) and `semantic` (evaluator subagent) -- but the four authoring categories pick the sharpest tool for each rule.
-
-`engine: ast` requires `ast-grep` on `$PATH` (`brew install ast-grep`, `cargo install ast-grep`, or `pip install ast-grep-cli`). If missing, ast rules are skipped at runtime with a one-line stderr hint and `bully doctor` flags it.
-
-Need to share rules across your own repos? `extends:` accepts any relative or absolute path to another `.bully.yml`:
+Sharing rules across repos:
 
 ```yaml
 schema_version: 1
 extends: ["../shared/bully-base.yml"]
 
 rules:
-  # project-specific overrides + additions here
+  # project-specific overrides + additions
 ```
 
-Local rules override inherited rules of the same id.
+Local rules override inherited rules of the same id. Full schema and authoring patterns: [Rule authoring](docs/rule-authoring.md).
 
-### Parallelism
-
-bully evaluates script and AST rules concurrently within a single file. By default it uses `min(8, os.cpu_count() or 4)` workers. You can override this via config:
-
-```yaml
-execution:
-  max_workers: 4
-```
-
-Or via env (wins over config):
+## Architecture
 
 ```
-BULLY_MAX_WORKERS=2 git commit
+┌──────────────────────────────────────────────────────────────┐
+│                Edit / Write tool call                        │
+│                         ↓                                    │
+│                  PostToolUse hook                            │
+│                         ↓                                    │
+│         ┌────────────────────────────────────┐               │
+│         │     Phase 1: deterministic         │               │
+│         │  script rules    │   ast rules     │               │
+│         │  (your linters)  │  (ast-grep)     │               │
+│         └────────────────────────────────────┘               │
+│                         ↓ pass                               │
+│         ┌────────────────────────────────────┐               │
+│         │     Phase 2: semantic              │               │
+│         │   bully-evaluator subagent         │               │
+│         │   (diff only, no Read/Grep/Glob)   │               │
+│         └────────────────────────────────────┘               │
+│                         ↓                                    │
+│             exit 0 (pass)  or  exit 2 (block)                │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Set `max_workers: 1` to restore fully serial execution if a rule script has side effects that require exclusive access to a resource. Files that match only a single rule skip the pool and run inline — the knob only matters when two or more deterministic rules apply to the same file.
+Phase 1 fails fast: deterministic rules block before bully spends a token on the evaluator. Phase 2 only runs when phase 1 passes. Session rules (`engine: session`) live outside this loop; they fire at `Stop` over the cumulative changed-set.
 
-If a rule's evaluator itself raises a Python exception (not just a non-zero shell exit), bully now catches it and emits a blocking `severity=error` violation with description `internal error: <ExcType>: <msg>`. The other rules in the phase still run to completion, so one bad rule cannot take down the whole check.
+Detail: [Design doc](docs/design.md) · flow image: [`bully-flow.png`](bully-flow.png).
 
-## How it works
+## Reference
 
-<p align="center">
-  <img src="bully-flow.png" alt="Bully flow: Edit/Write → PostToolUse hook → script phase → semantic phase → block or pass" width="500">
-</p>
-
-1. **Script + AST phase** -- deterministic checks. `script` rules shell out (grep, awk, linters); `ast` rules run structural patterns through ast-grep. Both are fast and fail the tool call on error-severity violations via exit code 2.
-2. **Semantic phase** -- if the deterministic phase passes, the pipeline hands a unified diff plus rule descriptions to the evaluator subagent. Structured verdicts come back; the parent session surfaces them.
-
-Deterministic rules stay as shell or ast patterns. Judgment rules ("inline single-use variables", "don't derive state with `useEffect`") live as plain English the agent evaluates against the diff. Same trigger, same output format, same fix loop -- across every language in the repo.
-
-## Prerequisites
+<details>
+<summary>Prerequisites</summary>
 
 - [Claude Code](https://claude.com/claude-code)
 - Python 3.10+ (`python3 --version`)
+- For `engine: ast` rules: `ast-grep` on `$PATH` (`brew install ast-grep`, `cargo install ast-grep`, or `pip install ast-grep-cli`). If missing, ast rules skip at runtime with a one-line stderr hint and `bully doctor` flags it.
 
-The pipeline is stdlib-only Python and the hook is a five-line bash wrapper. You do **not** `pip install` anything to use it.
+The pipeline is stdlib-only Python and the hook is a five-line bash wrapper. You don't `pip install` anything to use it.
+</details>
 
-## Install
-
-Bully ships as a Claude Code plugin. Two slash commands:
-
-```
-/plugin marketplace add https://github.com/dynamik-dev/bully
-/plugin install bully
-```
-
-That wires up everything: skills (`bully`, `bully-init`, `bully-author`, `bully-review`), the `bully-evaluator` subagent, and the `PostToolUse` hook that runs the pipeline on every `Edit` / `Write`. No clone, no symlinks, no `settings.json` surgery. Restart Claude Code to pick it up.
-
-To change the evaluator model, set the plugin's agent override or edit `model:` in `agents/bully-evaluator.md` in your local plugin cache (default is `sonnet`).
-
-### Verify the install
+<details>
+<summary>Verify the install (`bully doctor`)</summary>
 
 ```bash
 bully doctor
 ```
 
-`doctor` checks Python version, config presence and parse-ability, hook wiring, evaluator-agent registration, and each skill. One line per check, `[OK]` or `[FAIL]`.
+Checks Python version, config presence and parse-ability, hook wiring, evaluator-agent registration, and each skill. One line per check, `[OK]` or `[FAIL]`.
 
-If `bully` isn't on `$PATH` (e.g., you skipped `pip install -e .`), call the pipeline directly as a fallback:
+If `bully` isn't on `$PATH`, call the pipeline directly:
 
 ```bash
 python3 "$(ls -d ~/.claude/plugins/cache/*/bully/*/ | tail -1)pipeline/pipeline.py" --doctor
 ```
+</details>
 
-### Manual install (fallback)
-
-If you can't use the plugin system:
+<details>
+<summary>Manual install (no plugin)</summary>
 
 ```bash
 git clone https://github.com/dynamik-dev/bully.git ~/.bully
@@ -182,54 +213,10 @@ Then add to `~/.claude/settings.json`:
   }
 }
 ```
+</details>
 
-## Quick start (per project)
-
-### 1. Bootstrap a config
-
-```
-> /bully-init
-```
-
-The init skill detects your stack, finds which linters are already installed (ruff, biome, eslint, tsc, phpstan, clippy, …), and offers to wire each one as a passthrough rule so bully runs it on every Edit/Write. If a conventional linter for your stack is missing, it *offers* to install it -- never silently, always with approval. Migrates custom rules from CLAUDE.md / arch tests through the same four-option routing (passthrough → ast → script → semantic). Creates `.bully/` so `/bully-review` has telemetry to read. Review, tweak, commit.
-
-### 2. Adopting in a repo with existing violations
-
-A fresh rule across an existing codebase lights up every pre-existing problem. Baseline the current state so only _new_ violations block edits:
-
-```bash
-bully baseline-init --glob "src/**/*.ts"
-```
-
-That writes `.bully/baseline.json`. Future runs ignore anything recorded there. See [docs/design.md](docs/design.md) for the contract.
-
-### 3. Silencing a specific line
-
-When a rule is right in general but wrong on one line:
-
-```ts
-eval(expr); // bully-disable: no-eval reason: sandboxed input
-```
-
-Use sparingly. Telemetry tracks disables so noisy rules surface in `/bully-review`.
-
-### 4. Telemetry
-
-`/bully-init` creates `.bully/` and adds it to `.gitignore` by default. One JSONL record per pipeline run lands in `.bully/log.jsonl` -- per-developer data, never committed. After a few hundred edits, run `/bully-review` for noisy / dead / slow rule analysis. If you opted out of the directory during init, create it manually with `mkdir .bully` whenever you want telemetry to start recording.
-
-### 5. Evolve the config
-
-```
-> add a lint rule that bans var_dump() in PHP
-> tighten no-db-facade -- it's noisy
-> apply the recommendations from the last review
-```
-
-The `bully-author` skill walks through engine choice, drafts the rule, tests it against fixtures, and only then writes to `.bully.yml`.
-
-## Manual invocation
-
-For authoring and debugging rules without triggering an Edit:
+<details>
+<summary>Manual invocation</summary>
 
 ```bash
 bully validate                                  # parse + enum checks
@@ -237,23 +224,98 @@ bully lint src/foo.php                          # full pipeline on a file
 bully lint src/foo.php --rule no-compact        # isolate one rule
 bully lint src/foo.php --print-prompt           # see the semantic prompt
 bully show-resolved-config                      # rules after extends:
+bully guide src/foo.php                         # rules in scope before editing
+bully explain src/foo.php                       # which rules match and why
+bully session-start                             # banner for SessionStart hook
 ```
 
-`bully` is the console script installed by `pip install -e .`. If you can't install the package, call the pipeline directly: `python3 ~/.bully/pipeline/pipeline.py --validate` (or with `--file`, `--show-resolved-config`, etc.).
+`bully` is the console script installed by `pip install -e .`. Without that, call the pipeline directly: `python3 ~/.bully/pipeline/pipeline.py --validate` (or with `--file`, `--show-resolved-config`, etc.).
+</details>
 
-### Scoped feedforward
+<details>
+<summary>Changing the evaluator model</summary>
 
-Bully's per-edit feedback is the loud half of the loop. The quiet half -- what the agent should know *before* writing -- is exposed as scoped feedforward, not a generated manual:
+Default is `sonnet`. Set the plugin's agent override or edit `model:` in `agents/bully-evaluator.md` in your local plugin cache.
+</details>
 
-- `bully guide path/to/file` -- show every rule whose scope matches the file, with descriptions.
-- `bully explain path/to/file` -- show every rule and whether/why it matches.
-- `bully session-start` -- one-line banner used by the SessionStart hook. Wire it via `hooks/hooks.json`; it prints "bully active, N rules configured. Run `bully guide <file>` to see rules in scope."
+<details>
+<summary>Parallelism</summary>
 
-## Uninstall
+bully evaluates script and AST rules concurrently within a single file, defaulting to `min(8, os.cpu_count() or 4)` workers. Override via config:
+
+```yaml
+execution:
+  max_workers: 4
+```
+
+Or env (wins over config):
+
+```bash
+BULLY_MAX_WORKERS=2 git commit
+```
+
+Set `max_workers: 1` to restore serial execution if a rule script needs exclusive access to a resource. Files matching only one rule skip the pool and run inline.
+</details>
+
+<details>
+<summary>Internal-error handling</summary>
+
+If a rule's evaluator raises a Python exception (not just a non-zero shell exit), bully catches it and emits a blocking `severity=error` violation labeled `internal error: <ExcType>: <msg>`. Other rules in the phase still run, so one bad rule can't take down the whole check.
+</details>
+
+<details>
+<summary>Telemetry</summary>
+
+`/bully-init` creates `.bully/` and adds it to `.gitignore` (per-developer data, never committed). Each pipeline run appends a JSONL record to `.bully/log.jsonl`. If you opted out during init, `mkdir .bully` later to start recording.
+
+Format and analyzer details: [Telemetry doc](docs/telemetry.md).
+</details>
+
+<details>
+<summary>Test bench</summary>
+
+bully ships with a local bench for tracking its own speed and input-token cost over time.
+
+**Fixture suite:**
+
+```bash
+bully bench                    # run all bench/fixtures/, append bench/history.jsonl
+bully bench --compare          # diff the last two runs
+bully bench --no-tokens        # skip Anthropic API call, use char-count proxy
+bully bench --json             # emit raw run record on stdout
+```
+
+Commit a fresh run alongside changes that touch `pipeline/pipeline.py` to make speed/token impact visible in PRs.
+
+**Config cost analysis:**
+
+```bash
+bully bench --config path/to/.bully.yml
+```
+
+Reports input-token cost: floor tokens, per-rule marginal cost (sorted), diff scaling at 1/10/100/1000 added lines, and per-scope grouping.
+
+Both modes use Anthropic's `messages/count_tokens` endpoint when `ANTHROPIC_API_KEY` is set and the optional `anthropic` SDK is installed (`pip install -e ".[bench]"`). Without either, both fall back to a `len(json.dumps(payload))` proxy and tag output `method: proxy`. By default the bench only calls `count_tokens` (free); pass `--full` to dispatch real evaluator runs against fixtures (uses `messages.create`, opt-in only).
+</details>
+
+<details>
+<summary>Development</summary>
+
+```bash
+cd ~/.bully
+pip install -e ".[dev]"   # ruff, shellcheck-py, pytest, pre-commit
+bash scripts/lint.sh      # ruff + shellcheck + pytest + dogfood
+```
+
+`scripts/dogfood.sh` runs the pipeline against every source file in this repo. `.github/workflows/ci.yml` runs the same checks on every PR.
+</details>
+
+<details>
+<summary>Uninstall</summary>
 
 Plugin install:
 
-```
+```text
 /plugin uninstall bully
 /plugin marketplace remove bully-marketplace
 ```
@@ -266,56 +328,19 @@ rm ~/.claude/agents/bully-evaluator.md
 # Then remove the PostToolUse block from ~/.claude/settings.json
 rm -rf ~/.bully
 ```
+</details>
 
-## Development
+## Contributing
 
-```bash
-cd ~/.bully
-pip install -e ".[dev]"   # ruff, shellcheck-py, pytest, pre-commit
-bash scripts/lint.sh      # ruff + shellcheck + pytest + dogfood
-```
+Issues and PRs welcome. Good places to start:
 
-`scripts/dogfood.sh` runs the pipeline against every source file in this repo. `.github/workflows/ci.yml` runs the same checks on every PR.
+- New rule pack → `examples/`
+- New `engine: ast` pattern → `pipeline/ast_engine.py`
+- New skill or evaluator behavior → `skills/` and `agents/bully-evaluator.md`
+- Docs → `docs/`
 
-## Docs
-
-- [Design](docs/design.md) -- architecture, data flow, baseline contract, trade-offs.
-- [Rule authoring](docs/rule-authoring.md) -- script and semantic rules, testing.
-- [Telemetry](docs/telemetry.md) -- log format, analyzer, self-improvement workflow.
+Before contributing read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-## Contributing
-
-Issues and PRs welcome. Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before participating, [SECURITY.md](SECURITY.md) for how to report vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) for release notes.
-
-## Test Bench
-
-Bully ships with a local bench for watching its own speed and input-token cost over time. Two modes:
-
-### Mode A — fixture suite (regression trend)
-
-```bash
-bully bench                    # run all bench/fixtures/, append to bench/history.jsonl
-bully bench --compare          # diff the last two runs
-bully bench --no-tokens        # skip Anthropic API call, use char-count proxy
-bully bench --json             # emit the raw run record on stdout
-```
-
-Results are written to `bench/history.jsonl`, one line per run. Commit a fresh run alongside changes that touch `pipeline/pipeline.py` to make speed/token impact visible in PRs.
-
-### Mode B — config cost analysis
-
-```bash
-bully bench --config path/to/.bully.yml
-```
-
-Reports the input-token cost of the given config per invocation: floor tokens, per-rule marginal cost (sorted), diff scaling at 1/10/100/1000 added lines, and per-scope grouping. Useful for deciding whether a rule or rule pack earns its keep.
-
-### Real token counts
-
-Both modes use Anthropic's `messages/count_tokens` endpoint when `ANTHROPIC_API_KEY` is set and the optional `anthropic` SDK is installed (`pip install -e ".[bench]"`). Without either, both modes fall back to a `len(json.dumps(payload))` proxy and tag the output `method: proxy`.
-
-By default the bench only calls `count_tokens`, which is free. Pass `--full` to dispatch real evaluator runs against fixtures (uses `messages.create` and spends credits — opt-in only).

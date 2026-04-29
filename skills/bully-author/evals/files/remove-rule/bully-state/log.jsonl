@@ -1,0 +1,6 @@
+{"ts": "2026-04-15T12:00:00Z", "file": "/repo/src/a.py", "status": "pass", "latency_ms": 14, "rules": [{"id": "no-bare-except", "engine": "script", "verdict": "pass", "severity": "error", "latency_ms": 5}]}
+{"ts": "2026-04-16T09:30:00Z", "file": "/repo/src/b.py", "status": "pass", "latency_ms": 12, "rules": [{"id": "no-bare-except", "engine": "script", "verdict": "pass", "severity": "error", "latency_ms": 4}]}
+{"ts": "2026-04-17T16:45:00Z", "file": "/repo/src/c.py", "status": "blocked", "latency_ms": 18, "rules": [{"id": "no-bare-except", "engine": "script", "verdict": "violation", "severity": "error", "line": 22, "latency_ms": 6}]}
+{"ts": "2026-04-18T11:10:00Z", "file": "/repo/src/d.py", "status": "pass", "latency_ms": 11, "rules": [{"id": "no-bare-except", "engine": "script", "verdict": "pass", "severity": "error", "latency_ms": 4}]}
+{"ts": "2026-04-19T13:25:00Z", "file": "/repo/src/e.py", "status": "pass", "latency_ms": 13, "rules": [{"id": "no-bare-except", "engine": "script", "verdict": "pass", "severity": "error", "latency_ms": 5}]}
+{"ts": "2026-04-29T19:23:20Z", "file": "/Users/chrisarter/Documents/projects/bully/skills/bully-author/evals/files/remove-rule/.bully/log.jsonl", "status": "untrusted:untrusted", "latency_ms": 1, "rules": []}

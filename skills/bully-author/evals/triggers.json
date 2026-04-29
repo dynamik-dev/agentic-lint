@@ -1,0 +1,14 @@
+[
+  {"query": "add a lint rule that bans `as any` casts", "should_trigger": true},
+  {"query": "tighten the no-compact rule", "should_trigger": true},
+  {"query": "make no-db-facade a warning", "should_trigger": true},
+  {"query": "convert the no-todo rule to semantic", "should_trigger": true},
+  {"query": "remove the no-public-mutable-property rule", "should_trigger": true},
+  {"query": "ban unwrap() in production rust code", "should_trigger": true},
+  {"query": "apply the recommendations from /bully-review", "should_trigger": true},
+  {"query": "set up agentic lint", "should_trigger": false},
+  {"query": "review my lint rules", "should_trigger": false},
+  {"query": "the hook is blocking my edit, fix the violation", "should_trigger": false},
+  {"query": "delete the .bully.yml file", "should_trigger": false},
+  {"query": "explain how passthrough rules work", "should_trigger": false}
+]

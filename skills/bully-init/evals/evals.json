@@ -1,0 +1,74 @@
+{
+  "skill_name": "bully-init",
+  "evals": [
+    {
+      "id": 1,
+      "name": "python-ruff-passthrough",
+      "prompt": "Initialize agentic lint in this repo. The fixture project root is at evals/files/python-ruff/. This is a non-interactive eval -- proceed end-to-end without asking confirmation questions. Use these answers for any setup prompts: wire every installed linter detected; do not install missing linters; default severity = warning; use the stack-default skip globs unchanged; do not seed any example rules (empty rules block is fine); telemetry on.",
+      "expected_output": "A valid .bully.yml at the fixture root containing a ruff-check passthrough rule, no telemetry top-level key, and a .bully/ telemetry directory.",
+      "files": ["evals/files/python-ruff/pyproject.toml"],
+      "expectations": [
+        "The transcript shows the draft was first written to /tmp/bully-init-draft.yml (or another /tmp path) before the final move to .bully.yml",
+        "The transcript shows `bully --validate` was run against the draft and exited 0",
+        "The final .bully.yml contains a rule whose `script` field invokes `ruff check` with the `{file}` placeholder",
+        "The final .bully.yml has no top-level `telemetry:`, `exclude:`, or `ignore:` keys (only schema_version, extends, rules, skip, execution are valid)",
+        "The `skip:` block contains at least one of `.venv/**`, `__pycache__/**`, or `.ruff_cache/**`",
+        "A `.bully/` directory was created at the fixture root",
+        "`.gitignore` contains `.bully/`"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "ts-biome-vs-eslint-precedence",
+      "prompt": "Initialize agentic lint at evals/files/ts-biome-eslint/. Both biome and eslint configs are present. This is a non-interactive eval -- proceed end-to-end without asking confirmation questions. Use these answers: pick whichever linter your precedence rules say takes priority and skip the other; do not install missing tools; default severity = warning; use the stack-default skip globs; no example rules to seed; telemetry on.",
+      "expected_output": "A valid .bully.yml that wires only one of biome/eslint as a passthrough, with the choice justified in the transcript.",
+      "files": [
+        "evals/files/ts-biome-eslint/package.json",
+        "evals/files/ts-biome-eslint/biome.json",
+        "evals/files/ts-biome-eslint/eslint.config.js"
+      ],
+      "expectations": [
+        "The final .bully.yml contains a passthrough rule for exactly one of biome or eslint, not both",
+        "If biome is wired, the script field references `biome lint`; if eslint is wired, the script references `eslint`",
+        "The transcript explains why the chosen tool was picked over the other (precedence reasoning)",
+        "The `skip:` block contains `node_modules/**` and `dist/**`",
+        "The .bully.yml passes `bully --validate` (exit 0)"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "python-ruff-supersedes-black",
+      "prompt": "Initialize agentic lint at evals/files/python-ruff-black/. Both ruff and black are declared. This is a non-interactive eval -- proceed end-to-end without asking confirmation questions. Use these answers: apply your precedence rules to pick between ruff and black; do not install missing tools; default severity = warning; use the stack-default skip globs; no example rules to seed; telemetry on.",
+      "expected_output": "ruff is wired; black is skipped; the precedence is explained in the transcript.",
+      "files": ["evals/files/python-ruff-black/pyproject.toml"],
+      "expectations": [
+        "The final .bully.yml has a `ruff` passthrough rule",
+        "The final .bully.yml has NO rule whose script invokes `black`",
+        "The transcript explicitly notes that black was skipped because ruff covers its concerns",
+        "The .bully.yml passes `bully --validate` (exit 0)"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "no-manifests-asks-user",
+      "prompt": "Initialize agentic lint at evals/files/empty-repo/. There are no manifest files here.",
+      "expected_output": "The skill asks the user for the stack instead of guessing or writing a stub config.",
+      "files": [],
+      "expectations": [
+        "The final response asks the user for the stack or otherwise pauses for clarification",
+        "No .bully.yml was written under evals/files/empty-repo/ (file does not exist or was not created during the run)"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "existing-bully-yml-confirmation",
+      "prompt": "Initialize agentic lint at evals/files/existing-bully/. There is already a .bully.yml here.",
+      "expected_output": "The skill offers overwrite/merge/abort and does not silently overwrite the existing config.",
+      "files": ["evals/files/existing-bully/.bully.yml"],
+      "expectations": [
+        "The transcript does NOT show an unconditional overwrite of evals/files/existing-bully/.bully.yml",
+        "The final response presents the user with a choice between overwriting, merging, or aborting"
+      ]
+    }
+  ]
+}

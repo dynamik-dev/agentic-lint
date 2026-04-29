@@ -1,0 +1,14 @@
+[
+  {"query": "init agentic lint", "should_trigger": true},
+  {"query": "set up agentic lint in this repo", "should_trigger": true},
+  {"query": "create a .bully.yml for this project", "should_trigger": true},
+  {"query": "bootstrap lint config", "should_trigger": true},
+  {"query": "we don't have bully configured yet, can you initialize it", "should_trigger": true},
+  {"query": "generate the bully config", "should_trigger": true},
+  {"query": "add a lint rule that bans console.log", "should_trigger": false},
+  {"query": "review my lint rules for noise", "should_trigger": false},
+  {"query": "the bully hook is yelling at me, fix the violation", "should_trigger": false},
+  {"query": "remove the no-todo rule from .bully.yml", "should_trigger": false},
+  {"query": "what does agentic lint do", "should_trigger": false},
+  {"query": "set up eslint in this project", "should_trigger": false}
+]

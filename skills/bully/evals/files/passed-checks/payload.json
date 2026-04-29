@@ -1,0 +1,13 @@
+{
+  "file": "src/Services/UserService.php",
+  "diff": "--- a/src/Services/UserService.php\n+++ b/src/Services/UserService.php\n@@ -10,3 +10,8 @@ class UserService\n {\n     public function __construct(private UserRepository $users) {}\n+\n+    public function rename(int $id, string $newName): void\n+    {\n+        $this->users->update($id, ['name' => $newName]);\n+    }\n }",
+  "passed_checks": ["no-compact", "no-db-facade", "no-event-helper", "no-public-mutable-property"],
+  "evaluate": [
+    {
+      "id": "actionable-error-messages",
+      "description": "Thrown exceptions should include enough context for an operator to act -- include the offending value or a remediation hint.",
+      "severity": "warning"
+    }
+  ],
+  "_evaluator_input": "SEMANTIC EVALUATION REQUIRED\n\n<TRUSTED_POLICY>\nRule: actionable-error-messages (severity: warning)\n  Thrown exceptions should include enough context for an operator to act -- include the offending value or a remediation hint.\n</TRUSTED_POLICY>\n\n<UNTRUSTED_EVIDENCE>\nFile: src/Services/UserService.php\n\nDiff:\n--- a/src/Services/UserService.php\n+++ b/src/Services/UserService.php\n@@ -10,3 +10,8 @@ class UserService\n {\n     public function __construct(private UserRepository $users) {}\n+\n+    public function rename(int $id, string $newName): void\n+    {\n+        $this->users->update($id, ['name' => $newName]);\n+    }\n }\n</UNTRUSTED_EVIDENCE>\n"
+}

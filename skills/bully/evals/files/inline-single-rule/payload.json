@@ -1,0 +1,13 @@
+{
+  "file": "src/Evaluators/CachedEvaluator.php",
+  "diff": "--- a/src/Evaluators/CachedEvaluator.php\n+++ b/src/Evaluators/CachedEvaluator.php\n@@ -28,4 +28,7 @@ public function evaluate(string $key): bool\n {\n     $hit = $this->cache->get($key);\n     return $hit;\n+    $missed = $this->cache->miss($key);\n+    return $missed;\n }",
+  "passed_checks": ["no-compact", "no-db-facade"],
+  "evaluate": [
+    {
+      "id": "no-inline-single-use",
+      "description": "Inline a variable that is used only once -- favours readable expression.",
+      "severity": "warning"
+    }
+  ],
+  "_evaluator_input": "SEMANTIC EVALUATION REQUIRED\n\n<TRUSTED_POLICY>\nRule: no-inline-single-use\nDescription: Inline a variable that is used only once -- favours readable expression.\nSeverity: warning\n</TRUSTED_POLICY>\n\n<UNTRUSTED_EVIDENCE>\nFile: src/Evaluators/CachedEvaluator.php\n\nDiff:\n--- a/src/Evaluators/CachedEvaluator.php\n+++ b/src/Evaluators/CachedEvaluator.php\n@@ -28,4 +28,7 @@ public function evaluate(string $key): bool\n {\n     $hit = $this->cache->get($key);\n     return $hit;\n+    $missed = $this->cache->miss($key);\n+    return $missed;\n }\n</UNTRUSTED_EVIDENCE>\n"
+}

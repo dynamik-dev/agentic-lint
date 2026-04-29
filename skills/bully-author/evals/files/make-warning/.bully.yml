@@ -1,0 +1,16 @@
+schema_version: 1
+
+rules:
+  no-db-facade:
+    description: "Use repository classes, not the DB facade."
+    engine: script
+    scope: "*.php"
+    severity: warning
+    script: "grep -nE 'DB::table\\(' {file} && exit 1 || exit 0"
+
+  no-compact:
+    description: "Avoid PHP compact()."
+    engine: script
+    scope: "*.php"
+    severity: warning
+    script: "grep -nE 'compact\\(' {file} && exit 1 || exit 0"

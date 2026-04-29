@@ -1,0 +1,109 @@
+{
+  "skill_name": "bully-author",
+  "evals": [
+    {
+      "id": 1,
+      "name": "add-no-as-any-rule",
+      "prompt": "Add a lint rule to the .bully.yml at evals/files/ts-no-as-any/.bully.yml that bans `as any` casts in TypeScript code. Use the example file at evals/files/ts-no-as-any/src/example.ts as your fixture target if helpful.",
+      "expected_output": "A new ast-engine rule appended to .bully.yml after the fixture-testing protocol succeeds.",
+      "files": [
+        "evals/files/ts-no-as-any/.bully.yml",
+        "evals/files/ts-no-as-any/src/example.ts"
+      ],
+      "expectations": [
+        "The transcript shows a `command -v ast-grep` (or equivalent) availability probe before drafting the rule",
+        "The transcript shows two fixture files were created under /tmp/ — one designed to violate, one designed to be clean",
+        "The transcript shows `bully lint` was run against BOTH fixtures with `--config /tmp/bully-draft.yml` (or similarly named draft path) and `--rule <new-rule-id>`",
+        "The transcript shows the violating fixture exited 2 and the clean fixture exited 0",
+        "The final .bully.yml contains a new rule with `engine: ast` whose pattern targets `as any`",
+        "Pre-existing rules in the input .bully.yml are unchanged in the output (only the new rule was appended)",
+        "The new rule's severity is `warning` (new rules default to warning)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "tighten-no-compact",
+      "prompt": "Tighten the `no-compact` rule in evals/files/tighten-no-compact/.bully.yml — it's currently false-positiving on docblock comments. The fixture file at evals/files/tighten-no-compact/src/Foo.php contains both a real violation and a comment match.",
+      "expected_output": "The no-compact rule's pattern is tightened, fixture-tested, and re-written.",
+      "files": [
+        "evals/files/tighten-no-compact/.bully.yml",
+        "evals/files/tighten-no-compact/src/Foo.php"
+      ],
+      "expectations": [
+        "Only the `no-compact:` block changed in the final .bully.yml; other rules are byte-identical",
+        "The transcript shows fresh fixtures were created and the tightened pattern was re-tested against both violating and clean fixtures",
+        "The transcript shows the test was run against a draft config in /tmp/, not the real .bully.yml directly",
+        "The clean fixture (or one explicitly representing a docblock match) exits 0 with the tightened rule"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "make-warning-severity-swap",
+      "prompt": "Make the no-db-facade rule in evals/files/make-warning/.bully.yml a warning instead of an error.",
+      "expected_output": "Only the severity field of no-db-facade is changed; the fixture protocol is still re-run.",
+      "files": ["evals/files/make-warning/.bully.yml"],
+      "expectations": [
+        "In the final .bully.yml, the no-db-facade rule has `severity: warning`",
+        "All other rules in the file are byte-identical to the input",
+        "Only the severity line of no-db-facade changed (no other lines in that block)"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "convert-to-semantic",
+      "prompt": "Convert the no-inline-single-use rule in evals/files/convert-to-semantic/.bully.yml from script to a semantic rule.",
+      "expected_output": "The rule's engine is swapped to semantic, the script field is dropped, and the description is sharpened. --print-prompt and --explain are exercised.",
+      "files": ["evals/files/convert-to-semantic/.bully.yml"],
+      "expectations": [
+        "The final no-inline-single-use rule has `engine: semantic`",
+        "The `script:` field is removed from the no-inline-single-use rule",
+        "The transcript shows `bully lint ... --print-prompt` was invoked against a fixture",
+        "The transcript shows `bully lint ... --explain` was invoked and the line for no-inline-single-use shows `dispatched` (not `skipped`)"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "multi-turn-add-no-as-any",
+      "files": [
+        "evals/files/ts-no-as-any/.bully.yml",
+        "evals/files/ts-no-as-any/src/example.ts"
+      ],
+      "expected_output": "Across the conversation, the skill (a) proposes ast-grep before drafting, (b) waits for the user to choose ast vs grep, (c) runs the fixture-testing protocol after authorization, (d) writes the rule only after final user confirmation.",
+      "turns": [
+        {
+          "user": "I want to add a lint rule banning `as any` casts. The fixture .bully.yml is at evals/files/ts-no-as-any/.bully.yml. What's the right routing?",
+          "assistant_contains": ["ast-grep"]
+        },
+        {
+          "user": "yes, install ast-grep and use the ast engine. Now run your fixture-testing protocol against /tmp/bully-probe-* fixtures.",
+          "assistant_contains": ["fixture", "probe"]
+        },
+        {
+          "user": "looks good — write the rule to evals/files/ts-no-as-any/.bully.yml now."
+        }
+      ],
+      "expectations": [
+        "In the first turn the assistant proposes ast-grep BEFORE writing any rule (transcript shows ast-grep mentioned but no Edit/Write of .bully.yml in turn 1)",
+        "In the first turn the assistant does NOT yet write the rule to .bully.yml (turn 1 has no Edit/Write of the fixture .bully.yml)",
+        "After turn 2, the transcript shows fixture files were created at /tmp/bully-probe-* and `bully lint` was run against both with --rule and --config pointing to a /tmp/ draft path",
+        "After turn 3, the final evals/files/ts-no-as-any/.bully.yml contains a new rule with `engine: ast` whose pattern targets `as any`",
+        "Pre-existing rules in the input .bully.yml (like no-console-log) are byte-identical in the final output -- only the new rule was appended"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "remove-deprecated-rule",
+      "prompt": "Remove the no-foo rule from evals/files/remove-rule/.bully.yml. Verify it has not fired recently by grepping the fixture log at evals/files/remove-rule/bully-state/log.jsonl (treat that path as the equivalent of .bully/log.jsonl for this fixture).",
+      "expected_output": "The no-foo rule is deleted from .bully.yml only after confirming the log shows no recent fires.",
+      "files": [
+        "evals/files/remove-rule/.bully.yml",
+        "evals/files/remove-rule/bully-state/log.jsonl"
+      ],
+      "expectations": [
+        "The transcript shows a grep or read against evals/files/remove-rule/bully-state/log.jsonl before deletion",
+        "The final .bully.yml contains no `no-foo:` rule block",
+        "All other rules in the input are byte-identical in the output"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+schema_version: 1
+
+rules:
+  no-inline-single-use:
+    description: "Inline a variable that is used only once -- favours readable expression."
+    engine: script
+    scope: ["*.ts", "*.tsx"]
+    severity: warning
+    script: "grep -cE '^const ' {file} | awk '{ if ($1 > 0) exit 1; else exit 0 }'"
+
+  no-console-log:
+    description: "No console.log in committed code."
+    engine: script
+    scope: ["*.ts", "*.tsx"]
+    severity: error
+    script: "grep -nE 'console\\.log\\(' {file} && exit 1 || exit 0"

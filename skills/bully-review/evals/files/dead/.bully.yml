@@ -1,0 +1,16 @@
+schema_version: 1
+
+rules:
+  deprecated-carbon:
+    description: "Block legacy Carbon date construction patterns we've migrated away from."
+    engine: script
+    scope: "*.php"
+    severity: error
+    script: "grep -nE 'Carbon::createFromFormat' {file} && exit 1 || exit 0"
+
+  no-bare-except:
+    description: "No bare `except:` -- catch specific exception classes."
+    engine: script
+    scope: "*.py"
+    severity: error
+    script: "grep -nE '^[[:space:]]*except:[[:space:]]*$' {file} && exit 1 || exit 0"

@@ -1,0 +1,5 @@
+AGENTIC LINT -- blocked. Fix these before proceeding:
+
+- [no-compact] line 6: return compact('a', 'b');
+
+Passed checks: no-db-facade
