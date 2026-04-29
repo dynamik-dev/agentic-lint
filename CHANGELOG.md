@@ -5,6 +5,11 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## 0.12.1 — 2026-04-28
+
+- README repositioned: bully is now described as a hybrid agent-harness sensor (computational + inferential lanes, subagent firewall, scoped feedforward, session-aware Stop) rather than just a "PostToolUse linter". No code changes.
+- `description` fields in `plugin.json` and `pyproject.toml` updated to match.
+
 ## 0.12.0 — 2026-04-28
 
 - NEW: `bully debt [--strict]` — summarize disable-line markers across the repo, grouped by rule, with optional strict mode that fails on too-short reasons.

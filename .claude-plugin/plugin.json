@@ -1,7 +1,7 @@
 {
   "name": "bully",
-  "description": "Agent-native lint pipeline for Claude Code. PostToolUse hook enforces a single .bully.yml across script and semantic rules.",
-  "version": "0.12.0",
+  "description": "Hybrid agent-harness sensor for Claude Code. Computational + inferential rule lanes, subagent context firewall, scoped feedforward, session-aware verification.",
+  "version": "0.12.1",
   "author": {
     "name": "dynamik-dev"
   },

@@ -9,9 +9,20 @@
   <img src="https://img.shields.io/badge/Claude_Code-plugin-5A67D8" alt="Claude Code plugin">
 </p>
 
-## CLAUDE.md asks. Bully enforces.
+## A hybrid agent-harness sensor for Claude Code
 
-Bully is a lint pipeline for Claude Code. Every `Edit` / `Write` hits a `PostToolUse` hook that checks the change against `.bully.yml`. **Errors block the tool call -- Claude can't land the edit until it passes.** Warnings don't block. Any language; rules are scoped by file glob.
+Bully is a repository-local pipeline that runs computational rules (script + AST) and inferential rules (semantic, dispatched to a context-firewalled subagent) on every `Edit` and `Write` -- and at session boundaries (`Stop`) for changed-set rules that no per-edit lint can see. **Errors block the tool call -- Claude can't land the edit until it passes.** Any language; rules are scoped by file glob.
+
+What you get:
+
+- **Two enforcement lanes.** Deterministic checks for things that are unambiguous (a string is forbidden, a function call is dead). LLM evaluation for things that need judgment (single-use variables, ambiguous naming, audit-trail rules).
+- **Subagent context firewall.** Semantic evaluation runs in a read-only subagent (`bully-evaluator`) with no `Read`/`Grep`/`Glob` and explicit trusted-policy / untrusted-evidence boundaries in the prompt. Adversarial diff content cannot redirect the harness.
+- **Scoped feedforward, mechanical feedback.** `bully guide <file>` shows the agent what rules apply *before* it edits. Exit-2 on violation blocks the edit *after*.
+- **Self-pruning telemetry.** `bully-review` and the scheduled `bully-scheduler` agent retire dead rules and downgrade noisy ones automatically -- the cybernetic-governor loop.
+- **Behavior-harness lane.** Session rules (`engine: session`) fire at `Stop` over the cumulative changed-set: "auth changed without tests", "migration without rollback", "API changed without changelog".
+- **Trust-gated, capability-scoped script execution.** `bully trust` is the first gate. Per-rule `capabilities: { network: false, writes: cwd-only }` is the second.
+
+Bully is stdlib-only (no runtime deps) and ships as a Claude Code plugin.
 
 **Linters are the lawmakers. Bully is the cop.** Your installed tools (ruff, biome, eslint, tsc, phpstan, clippy, …) own what "a violation" means. Bully owns making sure Claude can't slip one past the hook. The question is never *whether* bully enforces -- just where a rule's definition lives.
 
