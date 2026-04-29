@@ -9,7 +9,7 @@ See docs/plan.md for the active improvement plan.
 
 - NEW: session-scope rules (`engine: session`) — fire at Stop time over the cumulative changed-set instead of per edit. First step into the article's "behavior harness" lane.
 - NEW: `bully stop`, `bully subagent-stop`, `bully session-record` subcommands and matching hook entries (`Stop`, `SubagentStop`).
-- NEW: `.bully/session.json` cumulative changed-set, appended to during PostToolUse.
+- NEW: `.bully/session.jsonl` cumulative changed-set (append-only JSONL; race-safe under parallel PostToolUse).
 - New telemetry record: `{"type": "subagent_stop"}` for sub-agent run accounting.
 
 ## 0.9.0 — 2026-04-28

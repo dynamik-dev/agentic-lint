@@ -23,6 +23,12 @@ def _run(args: list[str], cwd: Path, env: dict | None = None) -> subprocess.Comp
     )
 
 
+def _write_session(bully_dir: Path, files: list[str]) -> None:
+    bully_dir.mkdir(exist_ok=True)
+    lines = "".join(json.dumps({"file": f}) + "\n" for f in files)
+    (bully_dir / "session.jsonl").write_text(lines)
+
+
 def test_session_engine_rule_parses(tmp_path):
     cfg = tmp_path / ".bully.yml"
     cfg.write_text(
@@ -35,14 +41,14 @@ rules:
     when:
       changed_any: ['src/auth/**']
     require:
-      changed_any: ['tests/**auth**']
+      changed_any: ['tests/**/*auth*']
 """
     )
     rules = parse_config(str(cfg))
     rule = next(r for r in rules if r.id == "auth-needs-tests")
     assert rule.engine == "session"
     assert rule.when == {"changed_any": ["src/auth/**"]}
-    assert rule.require == {"changed_any": ["tests/**auth**"]}
+    assert rule.require == {"changed_any": ["tests/**/*auth*"]}
 
 
 def test_stop_blocks_when_required_files_absent(tmp_path):
@@ -57,18 +63,10 @@ rules:
     when:
       changed_any: ['src/auth/**']
     require:
-      changed_any: ['tests/**auth**']
+      changed_any: ['tests/**/*auth*']
 """
     )
-    bully_dir = tmp_path / ".bully"
-    bully_dir.mkdir()
-    (bully_dir / "session.json").write_text(
-        json.dumps(
-            {
-                "changed": ["src/auth/login.py"],
-            }
-        )
-    )
+    _write_session(tmp_path / ".bully", ["src/auth/login.py"])
     p = _run(["stop"], tmp_path)
     assert p.returncode == 2, (p.stdout, p.stderr)
     assert "auth-needs-tests" in p.stderr
@@ -86,18 +84,10 @@ rules:
     when:
       changed_any: ['src/auth/**']
     require:
-      changed_any: ['tests/**auth**']
+      changed_any: ['tests/**/*auth*']
 """
     )
-    bully_dir = tmp_path / ".bully"
-    bully_dir.mkdir()
-    (bully_dir / "session.json").write_text(
-        json.dumps(
-            {
-                "changed": ["src/auth/login.py", "tests/test_auth_login.py"],
-            }
-        )
-    )
+    _write_session(tmp_path / ".bully", ["src/auth/login.py", "tests/test_auth_login.py"])
     p = _run(["stop"], tmp_path)
     assert p.returncode == 0
 
@@ -126,5 +116,28 @@ def test_session_record_appends_changed_path(tmp_path):
     cfg.write_text("rules: {}\n")
     p = _run(["session-record", "--file", "src/foo.py"], tmp_path)
     assert p.returncode == 0
-    data = json.loads((tmp_path / ".bully" / "session.json").read_text())
-    assert "src/foo.py" in data["changed"]
+    lines = (tmp_path / ".bully" / "session.jsonl").read_text().strip().splitlines()
+    recorded = [json.loads(line)["file"] for line in lines]
+    assert "src/foo.py" in recorded
+
+
+def test_stop_warning_severity_returns_zero_but_prints(tmp_path):
+    cfg = tmp_path / ".bully.yml"
+    cfg.write_text(
+        """
+rules:
+  auth-tests-warning:
+    description: Auth changed without tests (warning only)
+    severity: warning
+    engine: session
+    when:
+      changed_any: ['src/auth/**']
+    require:
+      changed_any: ['tests/**/*auth*']
+"""
+    )
+    _write_session(tmp_path / ".bully", ["src/auth/login.py"])
+    p = _run(["stop"], tmp_path)
+    assert p.returncode == 0, (p.stdout, p.stderr)
+    # Warning still surfaces in stderr (visible to the user) but doesn't block.
+    assert "auth-tests-warning" in p.stderr

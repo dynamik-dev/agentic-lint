@@ -3056,33 +3056,15 @@ def _cmd_session_start_main(argv: list[str]) -> int:
 
 
 def _cmd_session_record(config_path: str | None, file_path: str) -> int:
-    """Append `file_path` to the cumulative session changed-set.
-
-    The changed-set lives at `.bully/session.json` next to the active config.
-    This is best-effort: if the JSON is corrupt we reinitialize, and any
-    OS error during write surfaces normally so callers can decide.
-    """
+    """Append `file_path` to the cumulative session changed-set."""
     path = config_path or ".bully.yml"
     cfg_abs = Path(path).resolve()
     bully_dir = cfg_abs.parent / ".bully"
     bully_dir.mkdir(exist_ok=True)
-    session_file = bully_dir / "session.json"
-    if session_file.exists():
-        try:
-            data = json.loads(session_file.read_text())
-        except (json.JSONDecodeError, OSError):
-            data = {"changed": []}
-    else:
-        data = {"changed": []}
-    if not isinstance(data, dict):
-        data = {"changed": []}
-    changed = data.get("changed")
-    if not isinstance(changed, list):
-        changed = []
-    if file_path not in changed:
-        changed.append(file_path)
-    data["changed"] = changed
-    session_file.write_text(json.dumps(data, indent=2))
+    session_file = bully_dir / "session.jsonl"
+    line = json.dumps({"file": file_path}) + "\n"
+    with open(session_file, "a") as f:
+        f.write(line)
     return 0
 
 
@@ -3094,24 +3076,14 @@ def _cmd_session_record_main(argv: list[str]) -> int:
     return _cmd_session_record(args.config, args.file)
 
 
-def _session_glob_match(path: str, pattern: str) -> bool:
-    """Match a posix path against a glob pattern. Supports `**` recursive segments."""
-    posix = path.replace("\\", "/")
-    if fnmatch.fnmatchcase(posix, pattern):
-        return True
-    # Best-effort `**` lowering: collapse to `*` and retry. This catches
-    # patterns like `tests/**auth**` where simple fnmatch fails on the
-    # leading `**` segment.
-    return "**" in pattern and fnmatch.fnmatchcase(posix, pattern.replace("**", "*"))
-
-
 def _cmd_stop(config_path: str | None) -> int:
     """Evaluate session-engine rules over the cumulative changed-set.
 
-    Reads `.bully/session.json` (written by session-record on each edit).
-    For each `engine: session` rule whose `when.changed_any` matched any
-    file in the set, verify `require.changed_any` also matched at least
-    one file. Otherwise the rule fires.
+    Reads `.bully/session.jsonl` (append-only, one `{"file": ...}` per line,
+    written by session-record on each edit). For each `engine: session` rule
+    whose `when.changed_any` matched any file in the set, verify
+    `require.changed_any` also matched at least one file. Otherwise the rule
+    fires.
 
     Errors block (exit 2). On a clean Stop the session file is deleted so
     the next session starts fresh.
@@ -3121,15 +3093,27 @@ def _cmd_stop(config_path: str | None) -> int:
     if not cfg_abs.is_file():
         return 0
     bully_dir = cfg_abs.parent / ".bully"
-    session_file = bully_dir / "session.json"
+    session_file = bully_dir / "session.jsonl"
     if not session_file.exists():
         return 0
+    seen: set[str] = set()
+    changed: list[str] = []
     try:
-        data = json.loads(session_file.read_text())
-    except (json.JSONDecodeError, OSError):
+        with open(session_file) as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    rec = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                fpath = rec.get("file") if isinstance(rec, dict) else None
+                if isinstance(fpath, str) and fpath not in seen:
+                    seen.add(fpath)
+                    changed.append(fpath)
+    except OSError:
         return 0
-    changed_raw = data.get("changed", []) if isinstance(data, dict) else []
-    changed: list[str] = [c for c in (changed_raw or []) if isinstance(c, str)]
     if not changed:
         return 0
 
@@ -3143,7 +3127,7 @@ def _cmd_stop(config_path: str | None) -> int:
     def matches_any(globs: list[str]) -> bool:
         for c in changed:
             for pat in globs or []:
-                if _session_glob_match(c, pat):
+                if _scope_glob_matches(pat, c):
                     return True
         return False
 
