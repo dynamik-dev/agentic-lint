@@ -5,15 +5,15 @@
     "name": "dynamik-dev"
   },
   "metadata": {
-    "description": "Bully — agent-native linting for Claude Code.",
-    "version": "0.7.0"
+    "description": "Bully — hybrid agent-harness sensor for Claude Code.",
+    "version": "0.8.1"
   },
   "plugins": [
     {
       "name": "bully",
       "source": "./",
-      "description": "Agent-native lint pipeline for Claude Code. PostToolUse hook enforces a single .bully.yml across script and semantic rules.",
-      "version": "0.7.0",
+      "description": "Hybrid agent-harness sensor for Claude Code. Computational + inferential rule lanes, subagent context firewall, scoped feedforward, session-aware verification.",
+      "version": "0.8.1",
       "homepage": "https://github.com/dynamik-dev/bully",
       "category": "development",
       "strict": true

@@ -5,6 +5,11 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## 0.8.1 — 2026-04-28
+
+- NEW: `session_init` telemetry record. SessionStart writes one stamp per Claude Code session: `{"type": "session_init", "bully_version": "0.8.1", "schema_version": 1, "ts": ...}`. Lets the analyzer (and forensic readers of older logs) attribute later records back to the bully release that produced them. Cheaper than tagging every record with the version.
+- `marketplace.json` versions and descriptions caught up with the v0.8.0 release (was lagging at 0.7.0 — a v0.8.0 release oversight). Existing installs at <=0.7.0 now see the update notification.
+
 ## 0.8.0 — 2026-04-28
 
 Harness-engineering elevation. Bully is now framed as a hybrid agent-harness sensor (computational + inferential lanes, subagent context firewall, scoped feedforward, session-aware Stop, self-pruning telemetry, capability-scoped script execution) rather than just a "PostToolUse linter".

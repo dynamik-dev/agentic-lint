@@ -64,11 +64,13 @@ Apply SemVer:
 
 If the commit list mixes categories, pick the highest-impact bump. If unsure, ask the user.
 
-### 3. Edit the four version fields
+### 3. Edit the five version fields
 
 Use `Edit` (not `sed`) to update each file. Exact new string in every case: `X.Y.Z` (no leading `v`).
 
 For `marketplace.json`, there are two occurrences — bump both.
+
+For `pipeline/pipeline.py`, update the `BULLY_VERSION = "X.Y.Z"` constant near the top. This value gets stamped into every `session_init` telemetry record, so it must match the released version exactly.
 
 ### 4. Rewrite CHANGELOG.md
 
@@ -102,16 +104,16 @@ If the `[Unreleased]` section is empty or placeholder-only, derive entries from 
 ### 5. Verify before committing
 
 ```bash
-grep -RnE '"version"|^version' .claude-plugin/ pyproject.toml
+grep -RnE '"version"|^version|^BULLY_VERSION' .claude-plugin/ pyproject.toml pipeline/pipeline.py
 git diff
 ```
 
-All four version lines must show `X.Y.Z`. Diff should touch only the four version fields and `CHANGELOG.md`. If anything else changed, abort.
+All five version lines must show `X.Y.Z`. Diff should touch only the five version fields and `CHANGELOG.md`. If anything else changed, abort.
 
 ### 6. Commit, tag, push
 
 ```bash
-git add .claude-plugin/plugin.json .claude-plugin/marketplace.json pyproject.toml CHANGELOG.md
+git add .claude-plugin/plugin.json .claude-plugin/marketplace.json pyproject.toml pipeline/pipeline.py CHANGELOG.md
 git commit -m "Release v0.2.0"
 ```
 
@@ -143,7 +145,7 @@ Report: version bumped, tag pushed, release URL (from `gh release create` output
 
 | Mistake | Fix |
 |---------|-----|
-| Only bumped `plugin.json`, not `marketplace.json` | Re-run the grep in §5 — all four lines must match. |
+| Only bumped `plugin.json`, not `marketplace.json` | Re-run the grep in §5 — all five lines must match. |
 | Tagged before pushing commit | Push the commit first, then the tag — otherwise remote has an orphan tag. |
 | Used a lightweight tag (`git tag v0.2.0`) | Use `-a ... -F ...` for an annotated tag with release notes. |
 | `gh release create` before `git push origin <tag>` | Push the tag first; `gh release create` needs it on the remote. |
