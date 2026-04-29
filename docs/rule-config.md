@@ -38,3 +38,19 @@ rules:
 ```
 
 The pipeline maintains an append-only JSONL file at `.bully/session.jsonl` (one `{"file": ...}` record per line) with the changed-set; PostToolUse appends to it on every Edit/Write. At Stop time, each session rule whose `when.changed_any` matched is checked against `require.changed_any`; if the requirement is missing, the rule fires (severity-driven, exit 2 for `error`). On a clean Stop the session file is deleted. The append-only format is race-safe under parallel PostToolUse.
+
+## Capabilities (script rules)
+
+`bully trust` is the first safety gate (the user explicitly approved running this config). `capabilities:` is the second — a per-rule declaration of what each script needs:
+
+```yaml
+rules:
+  lint-format:
+    engine: script
+    script: 'pnpm run lint'
+    capabilities:
+      network: false        # strip proxy vars; tripwire on accidental network use
+      writes: cwd-only      # HOME and TMPDIR confined to cwd and cwd/.bully/tmp
+```
+
+This is declarative and best-effort, not kernel-level sandboxing. Tools that respect standard env vars (`HOME`, `TMPDIR`, `*_PROXY`, `NO_PROXY`) will be confined; tools that bypass them won't be. Treat capabilities as a clarity-and-tripwire mechanism — they document intent and surface accidents loudly. For real isolation, run the script under your platform's sandbox of choice (`firejail`, `bwrap`, `sandbox-exec`, container) outside bully.

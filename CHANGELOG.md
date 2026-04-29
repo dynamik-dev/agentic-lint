@@ -5,6 +5,11 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## 0.12.0 — 2026-04-28
+
+- NEW: `bully debt [--strict]` — summarize disable-line markers across the repo, grouped by rule, with optional strict mode that fails on too-short reasons.
+- NEW: rule-level `capabilities:` block (`network: false`, `writes: cwd-only`). Declarative, env-based: strips proxy vars, redirects HOME/TMPDIR. Best-effort; not kernel sandboxing.
+
 ## 0.11.0 — 2026-04-28
 
 - NEW: `bully coverage [--json]` — per-file rule-scope coverage over telemetry. Surfaces uncovered files (zero rules match) and per-file rule lists.

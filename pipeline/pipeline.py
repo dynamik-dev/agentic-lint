@@ -42,6 +42,7 @@ VALID_RULE_FIELDS = {
     "context",
     "when",
     "require",
+    "capabilities",
 }
 VALID_OUTPUT_MODES = {"parsed", "passthrough"}
 VALID_TOP_LEVEL = {"rules", "schema_version", "extends", "skip", "execution"}
@@ -136,6 +137,12 @@ class Rule:
     # `{"changed_any": [glob, ...]}`.
     when: dict | None = None
     require: dict | None = None
+    # PR 5: per-rule declarative capability profile applied to script-engine
+    # subprocess env. Best-effort, env-based -- not kernel sandboxing. See
+    # `_capability_env` for the actual transforms (`network: false` strips
+    # *_PROXY vars and sets NO_PROXY=*; `writes: cwd-only` redirects HOME
+    # and TMPDIR into the cwd). Default None means today's permissive shape.
+    capabilities: dict | None = None
 
 
 @dataclass
@@ -398,7 +405,15 @@ def _parse_single_file(path: str) -> _ParsedConfig:
                     continue
                 parsed_nval = _parse_scalar(nvalue_raw)
                 # Coerce numeric-looking values to int for ergonomics
-                # (`context.lines: 30` should be 30, not "30").
+                # (`context.lines: 30` should be 30, not "30"). Booleans
+                # (`capabilities.network: false`) coerce to Python bool so
+                # downstream truthiness checks behave intuitively.
+                if parsed_nval == "true":
+                    nested_rule_field_dict[nkey] = True
+                    continue
+                if parsed_nval == "false":
+                    nested_rule_field_dict[nkey] = False
+                    continue
                 try:
                     nested_rule_field_dict[nkey] = int(parsed_nval)
                 except (TypeError, ValueError):
@@ -504,9 +519,9 @@ def _parse_single_file(path: str) -> _ParsedConfig:
                 folded_lines = []
                 field_lines[key] = lineno
                 continue
-            # `context:` / `when:` / `require:` with empty value opens a
-            # nested mapping at indent 6.
-            if key in ("context", "when", "require") and value_raw == "":
+            # `context:` / `when:` / `require:` / `capabilities:` with empty
+            # value opens a nested mapping at indent 6.
+            if key in ("context", "when", "require", "capabilities") and value_raw == "":
                 in_nested_rule_field = key
                 nested_rule_field_dict = {}
                 field_lines[key] = lineno
@@ -640,6 +655,14 @@ def _build_rule(
             field_lines.get("context", rule_line),
         )
 
+    capabilities_value = fields.get("capabilities")
+    if capabilities_value is not None and not isinstance(capabilities_value, dict):
+        raise ConfigError(
+            f"rule '{rule_id}': 'capabilities' must be a mapping "
+            f"(got {type(capabilities_value).__name__})",
+            field_lines.get("capabilities", rule_line),
+        )
+
     output_value = fields.get("output")
     if output_value is None:
         output_mode = "parsed"
@@ -671,6 +694,7 @@ def _build_rule(
         context=dict(context_value) if context_value is not None else None,
         when=dict(when_value) if when_value is not None else None,
         require=dict(require_value) if require_value is not None else None,
+        capabilities=(dict(capabilities_value) if isinstance(capabilities_value, dict) else None),
     )
 
 
@@ -1278,6 +1302,42 @@ def parse_script_output(rule_id: str, severity: str, output: str) -> list[Violat
     ]
 
 
+def _capability_env(base_env: dict[str, str], capabilities: dict | None) -> dict[str, str]:
+    """Apply rule capabilities to a subprocess environment.
+
+    Conservative implementation: stdlib only, no kernel-level sandboxing.
+    The intent is declarative + best-effort:
+      - network: false -> strip *_PROXY vars and set NO_PROXY=* so well-behaved
+        clients use direct connections, then fail if no network is reachable.
+        This is *not* a security boundary; it is a tripwire that turns
+        accidental network use into immediate failure.
+      - writes: cwd-only -> set HOME=cwd, TMPDIR=cwd/.bully/tmp. Tools that
+        respect HOME/TMPDIR will not write outside cwd.
+    """
+    if not capabilities:
+        return dict(base_env)
+    env = dict(base_env)
+    if capabilities.get("network") is False:
+        for key in (
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+        ):
+            env.pop(key, None)
+        env["NO_PROXY"] = "*"
+    writes = capabilities.get("writes")
+    if writes == "cwd-only":
+        cwd = os.getcwd()
+        env["HOME"] = cwd
+        tmp = os.path.join(cwd, ".bully", "tmp")
+        os.makedirs(tmp, exist_ok=True)
+        env["TMPDIR"] = tmp
+    return env
+
+
 def execute_script_rule(rule: Rule, file_path: str, diff: str) -> list[Violation]:
     """Run a script-engine rule against a file."""
     cmd = rule.script.replace("{file}", shlex.quote(file_path))
@@ -1290,6 +1350,7 @@ def execute_script_rule(rule: Rule, file_path: str, diff: str) -> list[Violation
             capture_output=True,
             text=True,
             timeout=30,
+            env=_capability_env(os.environ.copy(), rule.capabilities),
         )
     except subprocess.TimeoutExpired:
         return [
@@ -3257,6 +3318,89 @@ def _cmd_coverage_main(argv: list[str]) -> int:
     return _cmd_coverage(args.config, args.json)
 
 
+# ---------------------------------------------------------------------------
+# `bully debt` -- summarize per-line disable governance
+# ---------------------------------------------------------------------------
+
+# Distinct from `_DISABLE_RE` (which gates real-time per-edit suppressions in
+# the format `bully-disable: <ids>` with optional trailing reason). The debt
+# command tracks an explicit, longer-form marker that requires a reason --
+# `bully-disable-line <rule> reason: <text>` -- so authors can be held to a
+# documentation bar without changing the looser real-time directive.
+DEBT_DISABLE_RE = re.compile(
+    r"bully-disable-line\s+(?P<rule>[a-zA-Z0-9_\-]+)\s*reason:\s*(?P<reason>.+?)\s*$"
+)
+
+
+def _cmd_debt(config_path: str | None, strict: bool) -> int:
+    """Walk the repo and report every `bully-disable-line` marker, grouped by rule."""
+    import fnmatch as _fnmatch
+
+    path = config_path or ".bully.yml"
+    cfg_abs = Path(path).resolve()
+    if not cfg_abs.is_file():
+        print(f"config not found: {path}", file=sys.stderr)
+        return 1
+    root = cfg_abs.parent
+    skip_patterns = effective_skip_patterns(str(cfg_abs))
+
+    findings: list[tuple[str, int, str, str]] = []  # (file, line, rule, reason)
+    short_reasons: list[tuple[str, int, str, str]] = []
+
+    for path_obj in root.rglob("*"):
+        if not path_obj.is_file():
+            continue
+        rel = path_obj.relative_to(root).as_posix()
+        if any(_fnmatch.fnmatchcase(rel, pat) for pat in skip_patterns):
+            continue
+        try:
+            text = path_obj.read_text(errors="replace")
+        except (OSError, PermissionError):
+            continue
+        for i, line in enumerate(text.splitlines(), start=1):
+            m = DEBT_DISABLE_RE.search(line)
+            if not m:
+                continue
+            rule = m.group("rule")
+            reason = m.group("reason").strip()
+            findings.append((rel, i, rule, reason))
+            if len(reason) < 12:
+                short_reasons.append((rel, i, rule, reason))
+
+    if not findings:
+        print("No bully-disable-line markers found.")
+        return 0
+
+    by_rule: dict[str, list[tuple[str, int, str]]] = {}
+    for f, ln, rule, reason in findings:
+        by_rule.setdefault(rule, []).append((f, ln, reason))
+
+    print(f"bully debt: {len(findings)} disable-line markers across {len(by_rule)} rules")
+    for rule in sorted(by_rule):
+        print(f"\n  {rule}: {len(by_rule[rule])} suppressions")
+        for f, ln, reason in by_rule[rule]:
+            print(f"    {f}:{ln}  reason: {reason}")
+
+    if strict and short_reasons:
+        print(
+            f"\n{len(short_reasons)} markers have reasons shorter than 12 characters (strict mode):",
+            file=sys.stderr,
+        )
+        for f, ln, rule, reason in short_reasons:
+            print(f"  {f}:{ln}  [{rule}]  reason too short: {reason!r}", file=sys.stderr)
+        return 2
+
+    return 0
+
+
+def _cmd_debt_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="bully debt")
+    parser.add_argument("--config", default=".bully.yml")
+    parser.add_argument("--strict", action="store_true", help="Fail if reasons are too short.")
+    args = parser.parse_args(argv)
+    return _cmd_debt(args.config, args.strict)
+
+
 # ---- hook-mode + main ----
 
 
@@ -3382,6 +3526,8 @@ def main() -> None:
         sys.exit(_cmd_session_record_main(sys.argv[2:]))
     if len(sys.argv) >= 2 and sys.argv[1] == "coverage":
         sys.exit(_cmd_coverage_main(sys.argv[2:]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "debt":
+        sys.exit(_cmd_debt_main(sys.argv[2:]))
 
     args = _parse_args(sys.argv[1:])
 
