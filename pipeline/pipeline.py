@@ -1638,7 +1638,15 @@ def _rule_add_perspective(description: str) -> bool:
 
 
 def _can_match_diff(rule: Rule, diff: str) -> tuple[bool, str]:
-    """Return (should_evaluate, skip_reason_if_not)."""
+    """Return (should_evaluate, skip_reason_if_not).
+
+    Cheap pre-dispatch gate that drops diffs that *can't* match a semantic
+    rule -- empty diffs, whitespace-only adds, comment-only adds (for rules
+    not about comments), and pure deletions for "avoid X" rules. The floor
+    is at least one non-whitespace, non-comment added line; one-line edits
+    like `eval(input)` are exactly the violations a semantic rule should
+    catch, so they pass through.
+    """
     if not diff.strip():
         return False, "empty-diff"
 
@@ -1653,12 +1661,6 @@ def _can_match_diff(rule: Rule, diff: str) -> tuple[bool, str]:
 
     if not added and removed and _rule_add_perspective(rule.description):
         return False, "pure-deletion-add-perspective-rule"
-
-    if len(added) < 2 and not removed:
-        return False, "too-few-added-lines"
-
-    if added and len(added) < 2:
-        return False, "too-few-added-lines"
 
     return True, ""
 
@@ -3144,6 +3146,15 @@ def _cmd_session_record(config_path: str | None, file_path: str) -> int:
     """Append `file_path` to the cumulative session changed-set."""
     path = config_path or ".bully.yml"
     cfg_abs = Path(path).resolve()
+    # Trust gate: refuse to touch .bully/ for an un-reviewed config. The hook
+    # caller wraps this in `try/except: pass`, so a silent return 0 is the
+    # right shape -- run_pipeline (called next) will surface the untrusted
+    # message via _untrusted_stderr.
+    if not cfg_abs.is_file():
+        return 0
+    trust_status, _ = _trust_status(str(cfg_abs))
+    if trust_status != "trusted":
+        return 0
     bully_dir = cfg_abs.parent / ".bully"
     bully_dir.mkdir(exist_ok=True)
     session_file = bully_dir / "session.jsonl"
@@ -3170,12 +3181,20 @@ def _cmd_stop(config_path: str | None) -> int:
     `require.changed_any` also matched at least one file. Otherwise the rule
     fires.
 
-    Errors block (exit 2). On a clean Stop the session file is deleted so
-    the next session starts fresh.
+    Errors block (exit 2). On any non-blocking Stop (clean or warning-only)
+    the session file is deleted so the next session starts fresh.
     """
     path = config_path or ".bully.yml"
     cfg_abs = Path(path).resolve()
     if not cfg_abs.is_file():
+        return 0
+    # Trust gate: refuse to parse rules or block on session-rule violations
+    # for an un-reviewed config. Print the same friendly message the
+    # PostToolUse hook emits so the user knows why nothing happened, then
+    # return 0 (never block).
+    trust_status, trust_detail = _trust_status(str(cfg_abs))
+    if trust_status != "trusted":
+        sys.stderr.write(_untrusted_stderr(str(cfg_abs), trust_status, trust_detail))
         return 0
     bully_dir = cfg_abs.parent / ".bully"
     session_file = bully_dir / "session.jsonl"
@@ -3230,19 +3249,22 @@ def _cmd_stop(config_path: str | None) -> int:
             continue
         violations.append((r.id, r.severity, r.description))
 
-    if not violations:
-        # Reset session at clean Stop so the next session starts fresh.
+    blocking = [v for v in violations if v[1] == "error"]
+    if violations:
+        sys.stderr.write("bully session check failed:\n")
+        for rid, sev, desc in violations:
+            sys.stderr.write(f"- [{sev}] {rid}: {desc}\n")
+    if not blocking:
+        # Reset session at any non-blocking Stop (no violations, or warnings
+        # only) so the next session starts fresh. Leaving session.jsonl in
+        # place on a warning-only stop would re-fire the same warnings on
+        # every subsequent Stop until a clean stop occurred.
         try:
             session_file.unlink()
         except FileNotFoundError:
             pass
         return 0
-
-    blocking = [v for v in violations if v[1] == "error"]
-    sys.stderr.write("bully session check failed:\n")
-    for rid, sev, desc in violations:
-        sys.stderr.write(f"- [{sev}] {rid}: {desc}\n")
-    return 2 if blocking else 0
+    return 2
 
 
 def _cmd_stop_main(argv: list[str]) -> int:
