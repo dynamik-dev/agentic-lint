@@ -2,6 +2,9 @@
 All notable changes documented here. Format per Keep a Changelog, semver adherence.
 
 ## [Unreleased]
+### Changed
+- **BREAKING:** `engine: semantic` rules now require a non-empty `description` at parse time. The semantic engine sends `description` to the LLM evaluator as the rule prompt, so a missing or empty description meant the rule silently no-op'd — the user thought they were enforcing something but the evaluator received no policy to evaluate against. `parse_config` now raises `ConfigError` for semantic rules where `description` is missing, `""`, or whitespace-only (caught at `bully --validate` and at every hook invocation). Non-semantic engines (`script`, `ast`, `session`) still tolerate missing descriptions because their behaviour comes from `script:` / `pattern:` / `when:require:`. If you have a semantic rule failing to parse after this update, fill in the `description` — that is the prompt the evaluator was previously running blind.
+
 ### Fixed
 - Script-engine rules now run with `cwd` anchored to the directory containing `.bully.yml` (the config root) instead of inheriting the bully process's current directory. Affects both the subprocess `cwd=` and the `capabilities: { writes: cwd-only }` HOME/TMPDIR confinement, which previously based its sandbox on `os.getcwd()`. The PostToolUse hook always chdir's to the config root before invoking bully, so this was a no-op there; the bug surfaced when `bully lint /path/to/file --config /elsewhere/.bully.yml` was invoked from a third directory — scripts like `pnpm lint {file}` would resolve project-relative tooling against the wrong directory, and `writes: cwd-only` would create `.bully/tmp` outside the project. Regression coverage in `tests/test_script_engine.py`.
 

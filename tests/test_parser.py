@@ -2,9 +2,17 @@
 
 from pathlib import Path
 
-from bully import Rule, filter_rules, parse_config
+import pytest
+
+from bully import ConfigError, Rule, filter_rules, parse_config
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _write_config(tmp_path: Path, body: str) -> Path:
+    p = tmp_path / ".bully.yml"
+    p.write_text(body)
+    return p
 
 
 def test_parses_script_rule():
@@ -77,3 +85,111 @@ def test_filter_wildcard_scope_matches_all():
     ]
     assert len(filter_rules(rules, "anything.txt")) == 1
     assert len(filter_rules(rules, "deep/nested/file.php")) == 1
+
+
+# ---- semantic-rule description validation ------------------------------
+
+
+def test_semantic_rule_missing_description_raises(tmp_path: Path):
+    cfg = _write_config(
+        tmp_path,
+        "schema_version: 1\n"
+        "rules:\n"
+        "  no-desc:\n"
+        "    engine: semantic\n"
+        '    scope: "*.py"\n'
+        "    severity: error\n",
+    )
+    with pytest.raises(ConfigError) as exc:
+        parse_config(str(cfg))
+    msg = str(exc.value)
+    assert "description" in msg
+    assert "semantic" in msg
+
+
+def test_semantic_rule_empty_description_raises(tmp_path: Path):
+    cfg = _write_config(
+        tmp_path,
+        "schema_version: 1\n"
+        "rules:\n"
+        "  empty-desc:\n"
+        '    description: ""\n'
+        "    engine: semantic\n"
+        '    scope: "*.py"\n'
+        "    severity: error\n",
+    )
+    with pytest.raises(ConfigError) as exc:
+        parse_config(str(cfg))
+    msg = str(exc.value)
+    assert "description" in msg
+    assert "semantic" in msg
+
+
+def test_semantic_rule_whitespace_description_raises(tmp_path: Path):
+    cfg = _write_config(
+        tmp_path,
+        "schema_version: 1\n"
+        "rules:\n"
+        "  whitespace-desc:\n"
+        '    description: "   "\n'
+        "    engine: semantic\n"
+        '    scope: "*.py"\n'
+        "    severity: error\n",
+    )
+    with pytest.raises(ConfigError) as exc:
+        parse_config(str(cfg))
+    msg = str(exc.value)
+    assert "description" in msg
+    assert "semantic" in msg
+
+
+def test_semantic_rule_with_valid_description_parses(tmp_path: Path):
+    cfg = _write_config(
+        tmp_path,
+        "schema_version: 1\n"
+        "rules:\n"
+        "  good-desc:\n"
+        '    description: "Avoid bare except in production code"\n'
+        "    engine: semantic\n"
+        '    scope: "*.py"\n'
+        "    severity: error\n",
+    )
+    rules = parse_config(str(cfg))
+    assert len(rules) == 1
+    assert rules[0].id == "good-desc"
+    assert rules[0].engine == "semantic"
+    assert rules[0].description == "Avoid bare except in production code"
+
+
+def test_script_rule_without_description_still_parses(tmp_path: Path):
+    cfg = _write_config(
+        tmp_path,
+        "schema_version: 1\n"
+        "rules:\n"
+        "  script-no-desc:\n"
+        "    engine: script\n"
+        '    scope: "*.py"\n'
+        "    severity: error\n"
+        '    script: "exit 0"\n',
+    )
+    rules = parse_config(str(cfg))
+    assert len(rules) == 1
+    assert rules[0].id == "script-no-desc"
+    assert rules[0].description == ""
+
+
+def test_ast_rule_without_description_still_parses(tmp_path: Path):
+    cfg = _write_config(
+        tmp_path,
+        "schema_version: 1\n"
+        "rules:\n"
+        "  ast-no-desc:\n"
+        "    engine: ast\n"
+        '    scope: "*.py"\n'
+        "    severity: error\n"
+        '    pattern: "print($X)"\n',
+    )
+    rules = parse_config(str(cfg))
+    assert len(rules) == 1
+    assert rules[0].id == "ast-no-desc"
+    assert rules[0].description == ""

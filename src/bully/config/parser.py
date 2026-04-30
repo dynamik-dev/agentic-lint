@@ -514,6 +514,15 @@ def _build_rule(
             field_lines.get("language", rule_line),
         )
 
+    if engine == "semantic":
+        description_value = fields.get("description")
+        if description_value is None or not str(description_value).strip():
+            raise ConfigError(
+                f"rule '{rule_id}': engine is 'semantic' but no 'description' field provided "
+                f"(semantic rules use the description as the LLM prompt)",
+                field_lines.get("description", rule_line),
+            )
+
     when_value = fields.get("when")
     require_value = fields.get("require")
     if engine == "session":
