@@ -140,7 +140,11 @@ def cmd_trust(config_path: str | None, refresh: bool) -> int:
         .isoformat(timespec="seconds")
         .replace("+00:00", "Z"),
     }
-    save_trust_store(store)
+    try:
+        save_trust_store(store)
+    except OSError as err:
+        print(f"cannot write trust store to {trust_store_path()}: {err}", file=sys.stderr)
+        return 1
     verb = "updated" if existing else "trusted"
     print(f"{verb}: {abs_path}  sha256={checksum[:12]}...")
     return 0
