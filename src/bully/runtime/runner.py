@@ -120,9 +120,15 @@ def run_pipeline(
         baseline=baseline,
         config_path=config_path,
     )
+    # Anchor script subprocess cwd to the config root so script rules like
+    # `pnpm lint {file}` resolve project-relative tools regardless of where
+    # bully itself is invoked from. The PostToolUse hook chdir's to the
+    # config root before invoking bully, so this is a no-op there; the fix
+    # matters when the CLI is run from an unrelated directory.
+    config_root = str(Path(config_path).resolve().parent)
 
     def _adapter_script(rule, rctx):
-        return execute_script_rule(rule, rctx.file_path, rctx.diff)
+        return execute_script_rule(rule, rctx.file_path, rctx.diff, cwd=config_root)
 
     def _adapter_ast(rule, rctx):
         return execute_ast_rule(rule, rctx.file_path)

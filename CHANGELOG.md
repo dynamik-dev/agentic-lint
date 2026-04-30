@@ -2,6 +2,9 @@
 All notable changes documented here. Format per Keep a Changelog, semver adherence.
 
 ## [Unreleased]
+### Fixed
+- Script-engine rules now run with `cwd` anchored to the directory containing `.bully.yml` (the config root) instead of inheriting the bully process's current directory. Affects both the subprocess `cwd=` and the `capabilities: { writes: cwd-only }` HOME/TMPDIR confinement, which previously based its sandbox on `os.getcwd()`. The PostToolUse hook always chdir's to the config root before invoking bully, so this was a no-op there; the bug surfaced when `bully lint /path/to/file --config /elsewhere/.bully.yml` was invoked from a third directory — scripts like `pnpm lint {file}` would resolve project-relative tooling against the wrong directory, and `writes: cwd-only` would create `.bully/tmp` outside the project. Regression coverage in `tests/test_script_engine.py`.
+
 ### Planned
 See docs/plan.md for the active improvement plan.
 
