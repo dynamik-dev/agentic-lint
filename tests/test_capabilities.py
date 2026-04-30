@@ -39,7 +39,7 @@ rules:
     assert rule.capabilities == {"network": False, "writes": "cwd-only"}
 
 
-def test_capabilities_network_false_strips_proxy_env():
+def test_capabilities_network_false_strips_proxy_env(tmp_path):
     """When network: false is declared, the script subprocess should not see HTTP_PROXY etc."""
     base_env = {
         "HTTP_PROXY": "http://x",
@@ -47,7 +47,7 @@ def test_capabilities_network_false_strips_proxy_env():
         "ALL_PROXY": "http://z",
         "PATH": "/usr/bin",
     }
-    out = _capability_env(base_env, {"network": False, "writes": "cwd-only"})
+    out = _capability_env(base_env, {"network": False, "writes": "cwd-only"}, cwd=str(tmp_path))
     assert "HTTP_PROXY" not in out
     assert "HTTPS_PROXY" not in out
     assert "ALL_PROXY" not in out
@@ -55,9 +55,9 @@ def test_capabilities_network_false_strips_proxy_env():
     assert out["PATH"] == "/usr/bin"
 
 
-def test_capabilities_default_is_unrestricted():
+def test_capabilities_default_is_unrestricted(tmp_path):
     base_env = {"HTTP_PROXY": "http://x", "PATH": "/usr/bin"}
-    out = _capability_env(base_env, None)
+    out = _capability_env(base_env, None, cwd=str(tmp_path))
     assert out == base_env
 
 

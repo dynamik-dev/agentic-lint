@@ -15,7 +15,11 @@ from bully.engines.output import (
 )
 
 
-def capability_env(base_env: dict[str, str], capabilities: dict | None) -> dict[str, str]:
+def capability_env(
+    base_env: dict[str, str],
+    capabilities: dict | None,
+    cwd: str,
+) -> dict[str, str]:
     """Apply rule capabilities to a subprocess environment.
 
     Conservative implementation: stdlib only, no kernel-level sandboxing.
@@ -26,6 +30,10 @@ def capability_env(base_env: dict[str, str], capabilities: dict | None) -> dict[
         that turns accidental network use into immediate failure.
       - writes: cwd-only -> set HOME=cwd, TMPDIR=cwd/.bully/tmp. Tools that
         respect HOME/TMPDIR will not write outside cwd.
+
+    `cwd` anchors the cwd-only confinement and is required: callers must
+    pass the config root so HOME/TMPDIR land relative to the project, not
+    whatever directory the bully process happens to be running in.
     """
     if not capabilities:
         return dict(base_env)
@@ -43,7 +51,6 @@ def capability_env(base_env: dict[str, str], capabilities: dict | None) -> dict[
         env["NO_PROXY"] = "*"
     writes = capabilities.get("writes")
     if writes == "cwd-only":
-        cwd = os.getcwd()
         env["HOME"] = cwd
         tmp = os.path.join(cwd, ".bully", "tmp")
         os.makedirs(tmp, exist_ok=True)
@@ -51,8 +58,21 @@ def capability_env(base_env: dict[str, str], capabilities: dict | None) -> dict[
     return env
 
 
-def execute_script_rule(rule: Rule, file_path: str, diff: str) -> list[Violation]:
-    """Run a script-engine rule against a file."""
+def execute_script_rule(
+    rule: Rule,
+    file_path: str,
+    diff: str,
+    cwd: str,
+) -> list[Violation]:
+    """Run a script-engine rule against a file.
+
+    `cwd` is the directory the script subprocess runs in (and the anchor
+    for `writes: cwd-only` HOME/TMPDIR confinement). Required: should be
+    the config root — i.e. the directory containing `.bully.yml` — so
+    script invocations like `pnpm lint {file}` resolve project-relative
+    tooling consistently, regardless of where the bully process itself
+    was launched.
+    """
     cmd = rule.script.replace("{file}", shlex.quote(file_path))
     try:
         # bully-disable: no-shell-true-subprocess script-engine contract; cmd is shlex.quote'd above
@@ -63,7 +83,8 @@ def execute_script_rule(rule: Rule, file_path: str, diff: str) -> list[Violation
             capture_output=True,
             text=True,
             timeout=30,
-            env=capability_env(os.environ.copy(), rule.capabilities),
+            cwd=cwd,
+            env=capability_env(os.environ.copy(), rule.capabilities, cwd=cwd),
         )
     except subprocess.TimeoutExpired:
         return [

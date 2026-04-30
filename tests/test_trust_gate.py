@@ -169,6 +169,25 @@ def test_cmd_trust_missing_config_errors(tmp_path, isolated_trust_store, capsys)
     assert "not found" in capsys.readouterr().err
 
 
+def test_cmd_trust_unwritable_store_errors_cleanly(tmp_path, monkeypatch, capsys):
+    """An unwritable trust store path must return rc=1 with a clear diagnostic
+    -- no Python traceback should reach the user."""
+    cfg = _write_config(tmp_path)
+    # Point BULLY_TRUST_STORE at a path that's actually a directory, so the
+    # underlying file write raises IsADirectoryError (an OSError subclass).
+    bogus = tmp_path / "actually_a_dir"
+    bogus.mkdir()
+    monkeypatch.setenv("BULLY_TRUST_STORE", str(bogus))
+    monkeypatch.delenv("BULLY_TRUST_ALL", raising=False)
+
+    rc = _cmd_trust(str(cfg), refresh=False)
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "cannot write trust store" in captured.err
+    assert str(bogus) in captured.err
+    assert "Traceback" not in captured.err
+
+
 # ---- run_pipeline gate ---------------------------------------------------
 
 
