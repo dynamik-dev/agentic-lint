@@ -3107,6 +3107,14 @@ def _cmd_session_start(config_path: str | None) -> int:
     path = config_path or ".bully.yml"
     if not Path(path).is_file():
         return 0  # silent -- bully not configured here
+    # Trust gate: refuse to parse rules, emit a banner, or stamp a
+    # `session_init` telemetry record for an un-reviewed config. The hook
+    # caller wraps this in a best-effort try/except, so a silent return 0
+    # is the right shape -- run_pipeline will surface the untrusted message
+    # on the next PostToolUse via _untrusted_stderr.
+    trust_status, _ = _trust_status(str(Path(path).resolve()))
+    if trust_status != "trusted":
+        return 0
     try:
         rules = parse_config(path)
     except ConfigError:
@@ -3277,6 +3285,16 @@ def _cmd_stop_main(argv: list[str]) -> int:
 def _cmd_subagent_stop(config_path: str | None) -> int:
     """Append a subagent-completion telemetry record."""
     path = config_path or ".bully.yml"
+    cfg_abs = Path(path).resolve()
+    # Trust gate: refuse to append telemetry for an un-reviewed config. The
+    # hook caller wraps this in a best-effort try/except, so a silent
+    # return 0 is the right shape -- run_pipeline will surface the
+    # untrusted message on the next PostToolUse via _untrusted_stderr.
+    if not cfg_abs.is_file():
+        return 0
+    trust_status, _ = _trust_status(str(cfg_abs))
+    if trust_status != "trusted":
+        return 0
     log_path = _telemetry_path(path)
     if log_path is None:
         return 0
