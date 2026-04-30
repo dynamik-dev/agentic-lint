@@ -37,7 +37,7 @@ rules:
       changed_any: ['tests/**/*auth*']
 ```
 
-The pipeline maintains an append-only JSONL file at `.bully/session.jsonl` (one `{"file": ...}` record per line) with the changed-set; PostToolUse appends to it on every Edit/Write. At Stop time, each session rule whose `when.changed_any` matched is checked against `require.changed_any`; if the requirement is missing, the rule fires (severity-driven, exit 2 for `error`). On a clean Stop the session file is deleted. The append-only format is race-safe under parallel PostToolUse.
+The pipeline maintains an append-only JSONL file at `.bully/session.jsonl` (one `{"file": ...}` record per line) with the changed-set; PostToolUse appends to it on every Edit/Write. At Stop time, each session rule whose `when.changed_any` matched is checked against `require.changed_any`; if the requirement is missing, the rule fires (severity-driven, exit 2 for `error`). On a clean or warning-only Stop the session file is deleted; error-severity violations leave it intact until they are resolved. The append-only format is race-safe under parallel PostToolUse.
 
 ## Capabilities (script rules)
 
