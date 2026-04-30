@@ -7,7 +7,7 @@ from bully import Rule, execute_script_rule, parse_script_output
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def test_passing_rule_returns_no_violations():
+def test_passing_rule_returns_no_violations(tmp_path):
     rule = Rule(
         id="no-compact",
         description="No compact()",
@@ -16,11 +16,11 @@ def test_passing_rule_returns_no_violations():
         severity="error",
         script="grep -n 'compact(' {file} && exit 1 || exit 0",
     )
-    violations = execute_script_rule(rule, str(FIXTURES / "clean.php"), "")
+    violations = execute_script_rule(rule, str(FIXTURES / "clean.php"), "", cwd=str(tmp_path))
     assert violations == []
 
 
-def test_failing_rule_returns_violations():
+def test_failing_rule_returns_violations(tmp_path):
     rule = Rule(
         id="no-compact",
         description="No compact()",
@@ -29,7 +29,7 @@ def test_failing_rule_returns_violations():
         severity="error",
         script="grep -n 'compact(' {file} && exit 1 || exit 0",
     )
-    violations = execute_script_rule(rule, str(FIXTURES / "violation.php"), "")
+    violations = execute_script_rule(rule, str(FIXTURES / "violation.php"), "", cwd=str(tmp_path))
     assert len(violations) >= 1
     assert violations[0].rule == "no-compact"
     assert violations[0].engine == "script"
@@ -37,7 +37,7 @@ def test_failing_rule_returns_violations():
     assert violations[0].line is not None
 
 
-def test_failing_rule_captures_line_number():
+def test_failing_rule_captures_line_number(tmp_path):
     rule = Rule(
         id="no-db-facade",
         description="No DB::",
@@ -46,7 +46,7 @@ def test_failing_rule_captures_line_number():
         severity="error",
         script="grep -n 'DB::' {file} && exit 1 || exit 0",
     )
-    violations = execute_script_rule(rule, str(FIXTURES / "violation.php"), "")
+    violations = execute_script_rule(rule, str(FIXTURES / "violation.php"), "", cwd=str(tmp_path))
     assert len(violations) >= 1
     assert isinstance(violations[0].line, int)
     assert violations[0].line > 0
@@ -73,7 +73,7 @@ def test_parse_empty_output_returns_empty():
     assert violations == []
 
 
-def test_warning_severity_preserved():
+def test_warning_severity_preserved(tmp_path):
     rule = Rule(
         id="style-check",
         description="Style warning",
@@ -82,6 +82,6 @@ def test_warning_severity_preserved():
         severity="warning",
         script="grep -n 'compact(' {file} && exit 1 || exit 0",
     )
-    violations = execute_script_rule(rule, str(FIXTURES / "violation.php"), "")
+    violations = execute_script_rule(rule, str(FIXTURES / "violation.php"), "", cwd=str(tmp_path))
     assert len(violations) >= 1
     assert violations[0].severity == "warning"

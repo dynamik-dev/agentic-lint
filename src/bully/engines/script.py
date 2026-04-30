@@ -18,7 +18,7 @@ from bully.engines.output import (
 def capability_env(
     base_env: dict[str, str],
     capabilities: dict | None,
-    cwd: str | None = None,
+    cwd: str,
 ) -> dict[str, str]:
     """Apply rule capabilities to a subprocess environment.
 
@@ -31,11 +31,9 @@ def capability_env(
       - writes: cwd-only -> set HOME=cwd, TMPDIR=cwd/.bully/tmp. Tools that
         respect HOME/TMPDIR will not write outside cwd.
 
-    `cwd` anchors the cwd-only confinement. When None, falls back to
-    `os.getcwd()` for back-compat with callers that haven't been updated;
-    new callers should pass the config root so HOME/TMPDIR land relative
-    to the project, not whatever directory the bully process happens to
-    be running in.
+    `cwd` anchors the cwd-only confinement and is required: callers must
+    pass the config root so HOME/TMPDIR land relative to the project, not
+    whatever directory the bully process happens to be running in.
     """
     if not capabilities:
         return dict(base_env)
@@ -53,9 +51,8 @@ def capability_env(
         env["NO_PROXY"] = "*"
     writes = capabilities.get("writes")
     if writes == "cwd-only":
-        anchor = cwd if cwd is not None else os.getcwd()
-        env["HOME"] = anchor
-        tmp = os.path.join(anchor, ".bully", "tmp")
+        env["HOME"] = cwd
+        tmp = os.path.join(cwd, ".bully", "tmp")
         os.makedirs(tmp, exist_ok=True)
         env["TMPDIR"] = tmp
     return env
@@ -65,18 +62,16 @@ def execute_script_rule(
     rule: Rule,
     file_path: str,
     diff: str,
-    cwd: str | None = None,
+    cwd: str,
 ) -> list[Violation]:
     """Run a script-engine rule against a file.
 
     `cwd` is the directory the script subprocess runs in (and the anchor
-    for `writes: cwd-only` HOME/TMPDIR confinement). Should be the config
-    root — i.e. the directory containing `.bully.yml` — so script
-    invocations like `pnpm lint {file}` resolve project-relative tooling
-    consistently, regardless of where the bully process itself was
-    launched. When None, the subprocess inherits whatever cwd the bully
-    process is currently in (legacy behavior; only kept so existing
-    callers — including tests that haven't been updated — keep working).
+    for `writes: cwd-only` HOME/TMPDIR confinement). Required: should be
+    the config root — i.e. the directory containing `.bully.yml` — so
+    script invocations like `pnpm lint {file}` resolve project-relative
+    tooling consistently, regardless of where the bully process itself
+    was launched.
     """
     cmd = rule.script.replace("{file}", shlex.quote(file_path))
     try:

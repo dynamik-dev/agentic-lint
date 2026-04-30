@@ -166,7 +166,7 @@ def _script_rule(output_mode="parsed"):
     )
 
 
-def test_execute_script_rule_consults_stderr_when_stdout_is_empty():
+def test_execute_script_rule_consults_stderr_when_stdout_is_empty(tmp_path):
     # Pint writes its FAIL summary to stderr on some setups; stdout is
     # empty. The old pipeline would fall back to rule.description alone.
     rule = _script_rule()
@@ -176,13 +176,13 @@ def test_execute_script_rule_consults_stderr_when_stdout_is_empty():
             stdout="",
             stderr="src/Foo.php:10:5: FAIL missing trailing newline",
         )
-        vs = execute_script_rule(rule, "src/Foo.php", "")
+        vs = execute_script_rule(rule, "src/Foo.php", "", cwd=str(tmp_path))
     assert len(vs) == 1
     assert vs[0].line == 10
     assert "missing trailing newline" in vs[0].description
 
 
-def test_execute_script_rule_includes_stderr_tail_in_fallback_description():
+def test_execute_script_rule_includes_stderr_tail_in_fallback_description(tmp_path):
     # Neither stdout nor stderr parses to anything structured, but both
     # have content. The fallback description should include a tail of
     # combined output (not just the static rule description).
@@ -193,14 +193,14 @@ def test_execute_script_rule_includes_stderr_tail_in_fallback_description():
             stdout="banner line\n==========\n",
             stderr="real failure at the end\n",
         )
-        vs = execute_script_rule(rule, "src/Foo.php", "")
+        vs = execute_script_rule(rule, "src/Foo.php", "", cwd=str(tmp_path))
     assert len(vs) == 1
     assert "real failure at the end" in vs[0].description
     # Separator rows should not leak into the fallback description.
     assert "====" not in vs[0].description
 
 
-def test_execute_script_rule_passthrough_skips_parsing():
+def test_execute_script_rule_passthrough_skips_parsing(tmp_path):
     # output: passthrough must bypass parse_script_output entirely and
     # emit one violation carrying the tool tail.
     rule = _script_rule(output_mode="passthrough")
@@ -210,7 +210,7 @@ def test_execute_script_rule_passthrough_skips_parsing():
             stdout="src/Foo.php:10:5: this would normally parse\n",
             stderr="extra context\n",
         )
-        vs = execute_script_rule(rule, "src/Foo.php", "")
+        vs = execute_script_rule(rule, "src/Foo.php", "", cwd=str(tmp_path))
     assert len(vs) == 1
     # Passthrough keeps line=None (no structured parsing).
     assert vs[0].line is None

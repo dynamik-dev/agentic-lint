@@ -14,7 +14,6 @@ the `cwd=` kwarg from `subprocess.run` or reverts `capability_env` to
 """
 
 import os
-from pathlib import Path
 
 from bully import capability_env, run_pipeline
 
@@ -97,25 +96,6 @@ def test_capability_env_cwd_only_uses_passed_cwd_not_os_getcwd(tmp_path, monkeyp
     # The tmp dir must exist under repo, not under elsewhere.
     assert (repo / ".bully" / "tmp").is_dir()
     assert not (elsewhere / ".bully").exists()
-
-
-def test_capability_env_cwd_only_falls_back_to_os_getcwd_when_cwd_is_none(tmp_path, monkeypatch):
-    """Back-compat: `cwd=None` keeps the old `os.getcwd()` behavior.
-
-    Existing callers that haven't been updated should still work — the
-    fallback is just less correct (anchors HOME wherever the process
-    happens to be). Pinned so we don't accidentally tighten this and
-    break out-of-tree callers.
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-
-    monkeypatch.chdir(repo)
-
-    env = capability_env({"PATH": "/usr/bin"}, {"writes": "cwd-only"})
-
-    assert env["HOME"] == str(repo.resolve()) or env["HOME"] == os.getcwd()
-    assert (Path(env["TMPDIR"])).is_dir()
 
 
 def test_run_pipeline_writes_cwd_only_lands_under_config_root(tmp_path, monkeypatch):
