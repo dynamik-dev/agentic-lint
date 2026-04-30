@@ -112,7 +112,7 @@ which appends a record like:
 
 ### `semantic_skipped`
 
-Before dispatching the evaluator the pipeline applies cheap "can't possibly match" filters (whitespace-only hunks, pure deletions, comment-only hunks on identifier-targeting rules, <2 added lines). When a filter preempts a dispatch, the pipeline writes:
+Before dispatching the evaluator the pipeline applies cheap "can't possibly match" filters (empty diffs, whitespace-only additions, comment-only additions on identifier-targeting rules, pure deletions for "avoid X" rules). When a filter preempts a dispatch, the pipeline writes:
 
 ```json
 {
@@ -124,7 +124,7 @@ Before dispatching the evaluator the pipeline applies cheap "can't possibly matc
 }
 ```
 
-`reason` is one of `whitespace_only`, `deletion_only`, `comment_only`, `insufficient_added_lines`. These records make the skip lane visible so a skip pattern that hides real violations shows up in the analyzer instead of vanishing.
+`reason` is one of `empty-diff`, `whitespace-only-additions`, `comment-only-additions`, `pure-deletion-add-perspective-rule`. These records make the skip lane visible so a skip pattern that hides real violations shows up in the analyzer instead of vanishing.
 
 ### Note on skill version
 
