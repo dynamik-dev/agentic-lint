@@ -2,6 +2,11 @@
 All notable changes documented here. Format per Keep a Changelog, semver adherence.
 
 ## [Unreleased]
+
+### Planned
+See docs/plan.md for the active improvement plan.
+
+## 0.8.4 — 2026-04-30
 ### Changed
 - **BREAKING:** `engine: semantic` rules now require a non-empty `description` at parse time. The semantic engine sends `description` to the LLM evaluator as the rule prompt, so a missing or empty description meant the rule silently no-op'd — the user thought they were enforcing something but the evaluator received no policy to evaluate against. `parse_config` now raises `ConfigError` for semantic rules where `description` is missing, `""`, or whitespace-only (caught at `bully --validate` and at every hook invocation). Non-semantic engines (`script`, `ast`, `session`) still tolerate missing descriptions because their behaviour comes from `script:` / `pattern:` / `when:require:`. If you have a semantic rule failing to parse after this update, fill in the `description` — that is the prompt the evaluator was previously running blind.
 

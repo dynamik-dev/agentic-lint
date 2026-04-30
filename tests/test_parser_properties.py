@@ -44,12 +44,16 @@ def rule_id_strategy(draw):
 
 
 def _safe_desc_text() -> st.SearchStrategy[str]:
-    """Description text that is safe to embed in double quotes."""
+    """Description text that is safe to embed in double quotes.
+
+    Filters out whitespace-only strings: parser rejects empty descriptions
+    on semantic rules, and `_serialize` produces semantic rules.
+    """
     return st.text(
         alphabet=st.sampled_from(list(string.ascii_letters + string.digits) + [" ", ",", "."]),
         min_size=1,
         max_size=30,
-    )
+    ).filter(lambda s: s.strip() != "")
 
 
 @st.composite
