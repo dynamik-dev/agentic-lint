@@ -179,19 +179,19 @@ mv /tmp/bully-init-draft.yml .bully.yml
 
 ### Binary resolution
 
-Bully ships a `bully` wrapper at its repo root that `exec`s `python3 pipeline/pipeline.py`. Plugin installs don't run `pip install`, so `bully` is often not on `PATH`. Resolve the binary with this one-liner (used above):
+Bully ships a `bin/bully` wrapper that the plugin auto-adds to `$PATH`, so `command -v bully` should resolve on any 0.8.5+ install. Older caches won't have `bin/bully`; resolve with this one-liner (used above):
 
 ```bash
-BULLY=$(command -v bully 2>/dev/null || ls -d ~/.claude/plugins/cache/*/bully/*/bully 2>/dev/null | sort -V | tail -1)
+BULLY=$(command -v bully 2>/dev/null || ls -d ~/.claude/plugins/cache/*/bully/*/bin/bully 2>/dev/null | sort -V | tail -1)
 ```
 
-`sort -V | tail -1` picks the newest version from the plugin cache, avoiding stale `0.3.0`/`0.4.x` entries that older installs leave behind. If `$BULLY` is empty after that, tell the user to either alias it (`alias bully='<path>'`) or symlink into `~/.local/bin`, and fall back to `python3 <plugin-path>/pipeline/pipeline.py ...`.
+`sort -V | tail -1` picks the newest cached version. If `$BULLY` is empty (very old install, no `bin/bully`), fall back to `PYTHONPATH=<plugin-path>/src python3 -m bully ...`.
 
 ## Step 6: Verify and enable
 
 Before handing off, bring the config into a runnable state:
 
-1. **Trust the config** so script/ast rules can execute: `bully trust` (fallback: `python3 <plugin-path>/pipeline/pipeline.py --trust --config .bully.yml`).
+1. **Trust the config** so script/ast rules can execute: `bully trust` (fallback: `PYTHONPATH=<plugin-path>/src python3 -m bully --trust --config .bully.yml`).
 2. **Run `bully doctor`** and surface any `[FAIL]` lines. **Known false positives for plugin installs** -- note them but do not try to "fix" them:
    - `[FAIL] no PostToolUse hook invoking hook.sh found in .claude/settings.json` -- the plugin loads `hooks/hooks.json` dynamically via the Claude Code plugin system. `.claude/settings.json` is *not* where the hook lives for plugin installs, so this FAIL is expected and harmless.
    - Skill/agent paths pointing at an older version (e.g. binary is `0.5.0` but doctor resolves skills from `0.3.0`). Doctor picks the first match in the plugin cache; stale cache directories from prior versions can shadow the current one. Either tell the user to delete old cache dirs under `~/.claude/plugins/cache/bully-marketplace/bully/` or just note it.

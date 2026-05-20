@@ -114,13 +114,13 @@ Never write a rule to `.bully.yml` without running this protocol first.
 
 ### Binary resolution
 
-Plugin installs don't put `bully` on `$PATH`. Resolve it once at the top of the protocol and use `$BULLY` in every command below:
+The plugin ships `bin/bully` on `$PATH` (0.8.5+), but older caches won't. Resolve it once at the top of the protocol and use `$BULLY` in every command below:
 
 ```bash
-BULLY=$(command -v bully 2>/dev/null || ls -d ~/.claude/plugins/cache/*/bully/*/bully 2>/dev/null | sort -V | tail -1)
+BULLY=$(command -v bully 2>/dev/null || ls -d ~/.claude/plugins/cache/*/bully/*/bin/bully 2>/dev/null | sort -V | tail -1)
 ```
 
-If `$BULLY` is empty, fall back to `python3 ~/.bully/pipeline/pipeline.py` for manual installs.
+If `$BULLY` is empty (no `bin/bully` in the cache), fall back to `PYTHONPATH=~/.bully/src python3 -m bully` for manual installs.
 
 ### Steps
 

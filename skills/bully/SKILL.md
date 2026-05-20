@@ -84,7 +84,7 @@ After parsing VIOLATIONS / NO_VIOLATIONS (whether from the subagent or from inli
 bully --log-verdict --rule <rule-id> --verdict <pass|violation> --file <file-path>
 ```
 
-Use `violation` if the rule appears in VIOLATIONS, `pass` if it appears in NO_VIOLATIONS. This is a no-op when telemetry is disabled, so always invoke. If `bully` is not on `$PATH`, fall back to invoking the pipeline directly: `python3 "$(ls -d ~/.claude/plugins/cache/*/bully/*/ 2>/dev/null | tail -1)pipeline/pipeline.py"` for plugin installs or `python3 ~/.bully/pipeline/pipeline.py` for the manual install.
+Use `violation` if the rule appears in VIOLATIONS, `pass` if it appears in NO_VIOLATIONS. This is a no-op when telemetry is disabled, so always invoke. The `bully` command is shipped on `$PATH` by the plugin (`bin/bully` wrapper). If you see `command not found: bully`, the plugin install is corrupt or pre-0.8.5; skip the verdict log rather than chasing fallbacks.
 
 ## passed_checks
 

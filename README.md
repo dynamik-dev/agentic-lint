@@ -175,10 +175,10 @@ bully doctor
 
 Checks Python version, config presence and parse-ability, hook wiring, evaluator-agent registration, and each skill. One line per check, `[OK]` or `[FAIL]`.
 
-If `bully` isn't on `$PATH`, call the pipeline directly:
+If `bully` isn't on `$PATH` (pre-0.8.5 plugin caches), invoke the module directly:
 
 ```bash
-python3 "$(ls -d ~/.claude/plugins/cache/*/bully/*/ | tail -1)pipeline/pipeline.py" --doctor
+PYTHONPATH="$(ls -d ~/.claude/plugins/cache/*/bully/*/src 2>/dev/null | tail -1)" python3 -m bully --doctor
 ```
 </details>
 
@@ -205,7 +205,7 @@ Then add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.bully/pipeline/hook.sh"
+            "command": "$HOME/.bully/hooks/hook.sh"
           }
         ]
       }
@@ -229,7 +229,7 @@ bully explain src/foo.php                       # which rules match and why
 bully session-start                             # banner for SessionStart hook
 ```
 
-`bully` is the console script installed by `pip install -e .`. Without that, call the pipeline directly: `python3 ~/.bully/pipeline/pipeline.py --validate` (or with `--file`, `--show-resolved-config`, etc.).
+`bully` is shipped on `$PATH` by the plugin (`bin/bully` wrapper) and also installed by `pip install -e .`. Without either, invoke the module: `PYTHONPATH=~/.bully/src python3 -m bully --validate` (or with `--file`, `--show-resolved-config`, etc.).
 </details>
 
 <details>
