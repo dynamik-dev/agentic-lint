@@ -6,6 +6,13 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## 0.8.5 — 2026-05-20
+### Fixed
+- `bully` is now reliably on `$PATH` for plugin users via a new `bin/bully` wrapper. Claude Code auto-prepends each installed plugin's `bin/` directory to `$PATH`, but bully wasn't shipping one — so when the skill ran `bully --log-verdict ...` to record semantic-evaluation telemetry, the shell answered with `command not found: bully` (exit 127) in every plugin-using repo. The documented fallback (`python3 .../pipeline/pipeline.py`) was also broken: that path was deleted in the 0.8.3 src/ restructure. `bin/bully` mirrors the PYTHONPATH-shim logic already used by `hooks/hook.sh` and the repo-root `./bully` wrapper (`PYTHONPATH=<plugin>/src python3 -m bully "$@"`), so the primary path now works for plugin installs, editable installs, and manual symlink installs alike — with no `pip install` step. The bully, bully-init, and bully-author skills and the README dropped the dead `pipeline/pipeline.py` fallback and now document `PYTHONPATH=.../src python3 -m bully` as the form to use when `command -v bully` fails (very old caches without `bin/bully`).
+
+### Planned
+See docs/plan.md for the active improvement plan.
+
 ## 0.8.4 — 2026-04-30
 ### Changed
 - **BREAKING:** `engine: semantic` rules now require a non-empty `description` at parse time. The semantic engine sends `description` to the LLM evaluator as the rule prompt, so a missing or empty description meant the rule silently no-op'd — the user thought they were enforcing something but the evaluator received no policy to evaluate against. `parse_config` now raises `ConfigError` for semantic rules where `description` is missing, `""`, or whitespace-only (caught at `bully --validate` and at every hook invocation). Non-semantic engines (`script`, `ast`, `session`) still tolerate missing descriptions because their behaviour comes from `script:` / `pattern:` / `when:require:`. If you have a semantic rule failing to parse after this update, fill in the `description` — that is the prompt the evaluator was previously running blind.
