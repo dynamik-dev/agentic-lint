@@ -6,6 +6,21 @@ All notable changes documented here. Format per Keep a Changelog, semver adheren
 ### Planned
 See docs/plan.md for the active improvement plan.
 
+## 0.8.6 — 2026-05-23
+### Security
+- Bump `idna` 3.13 → 3.16 to close [GHSA-65pc-fj4g-8rjx](https://github.com/kjd/idna/security/advisories/GHSA-65pc-fj4g-8rjx) (CVE-2026-45409). The vulnerability is a denial-of-service in `idna.encode()` reachable only via the `anthropic` SDK in `bench/dispatch.py` (dev-only, not runtime), but the bump is free and the audit had to land somewhere. Surfaced by a full OSV scan of the resolved dependency tree — the other 38 packages came back clean.
+
+### Changed
+- CI now installs dependencies via `uv sync --locked --all-extras` instead of `pip install -e ".[dev]"`. The lockfile was previously decorative on CI (pip re-resolved from PyPI every run), so a malicious release of any dev dep would have landed in CI within hours of publish. With this change, dev-dep bumps require an explicit lockfile update that flows through review.
+- `actions/checkout` and the Python toolchain action are now pinned to commit SHAs (`actions/checkout@34e1148  # v4`, `astral-sh/setup-uv@0880764  # v8.1.0`) instead of floating `@v4`/`@v5` tags. This mitigates the tag-mutation supply chain attack class — see the `tj-actions/changed-files` Sept 2024 incident for what happens to consumers who don't pin.
+- Replaced `actions/setup-python` with `astral-sh/setup-uv`. `uv` provisions the Python interpreter from the lockfile's `requires-python`, so the separate setup-python step is redundant.
+- Added a top-level `permissions: contents: read` to the CI workflow. The jobs only read, so the default token scope (which can be `contents: write` on `push`) was wider than needed.
+- `pre-commit` hook revs (`ruff-pre-commit`, `shellcheck-py`) are now frozen to commit SHAs with the version in a trailing comment. Same tag-mutation mitigation as the Actions pins.
+
+### Added
+- `ast-grep-cli>=0.39` to the `[dev]` extra. It was previously installed unpinned by a dedicated CI step (`pip install ast-grep-cli`), which auto-pulled latest on every run. Moving it into `[dev]` means it's locked and hashed in `uv.lock` alongside the rest of the dev tree.
+- `.github/dependabot.yml` covering `github-actions`, `pip` (dev group), and `pre-commit` on a weekly cadence. SHA pins are a frozen snapshot — without an updater they rot. Dependabot reads the `# vX.Y.Z` comments on the pinned SHAs and opens PRs for the next release.
+
 ## 0.8.5 — 2026-05-20
 ### Fixed
 - `bully` is now reliably on `$PATH` for plugin users via a new `bin/bully` wrapper. Claude Code auto-prepends each installed plugin's `bin/` directory to `$PATH`, but bully wasn't shipping one — so when the skill ran `bully --log-verdict ...` to record semantic-evaluation telemetry, the shell answered with `command not found: bully` (exit 127) in every plugin-using repo. The documented fallback (`python3 .../pipeline/pipeline.py`) was also broken: that path was deleted in the 0.8.3 src/ restructure. `bin/bully` mirrors the PYTHONPATH-shim logic already used by `hooks/hook.sh` and the repo-root `./bully` wrapper (`PYTHONPATH=<plugin>/src python3 -m bully "$@"`), so the primary path now works for plugin installs, editable installs, and manual symlink installs alike — with no `pip install` step. The bully, bully-init, and bully-author skills and the README dropped the dead `pipeline/pipeline.py` fallback and now document `PYTHONPATH=.../src python3 -m bully` as the form to use when `command -v bully` fails (very old caches without `bin/bully`).
