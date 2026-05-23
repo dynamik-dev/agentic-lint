@@ -1,10 +1,20 @@
 version: 2
+
+# 48h cooldown on every ecosystem: any newly-published version must sit on the
+# registry for at least 2 days before Dependabot will propose it. This is the
+# blast-radius mitigation for fresh supply-chain compromises (stolen tokens,
+# typosquats, malicious releases) — most are detected and yanked within hours,
+# so 48h is enough to avoid the worst window without slowing the project to a
+# crawl. Applies to patch/minor/major identically.
+
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2
     groups:
       actions:
         patterns:
@@ -15,6 +25,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2
     groups:
       dev:
         dependency-type: development
@@ -26,3 +38,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2
+
+  # No package.json today; this stanza is a no-op until one lands at the repo
+  # root. Listed so the cooldown policy is uniform if/when node tooling is added.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2
