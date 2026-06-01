@@ -41,12 +41,6 @@ updates:
     cooldown:
       default-days: 2
 
-  # No package.json today; this stanza is a no-op until one lands at the repo
-  # root. Listed so the cooldown policy is uniform if/when node tooling is added.
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    cooldown:
-      default-days: 2
+  # No npm ecosystem: there is no package.json at the repo root, and Dependabot
+  # hard-errors ("dependency_file_not_found") rather than no-op'ing on a missing
+  # manifest. Add an `npm` stanza here only once a root package.json actually lands.
