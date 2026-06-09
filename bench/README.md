@@ -43,19 +43,37 @@ python bench/run_skill_evals.py execute --skill skills/bully-init --only 1
 # Different model
 python bench/run_skill_evals.py --executor-model claude-haiku-4-5-20251001 \
     triggers --skill skills/bully-review
+
+# Error bars: run N epochs per eval -> every rate carries a 95% CI
+python bench/run_skill_evals.py execute --skill skills/bully-author --epochs 5
+
+# Control arm: also run without_skill -> paired per-eval pass_rate delta
+python bench/run_skill_evals.py execute --skill skills/bully-author --epochs 5 --baseline
 ```
+
+LLM runs (executor and graders) are stochastic, so a single run is a point
+estimate with unknown variance. `--epochs N` repeats each eval N times and
+reports `mean [95% CI]`; default is `1` (legacy) but use `>=5` for any number
+you intend to compare or trust. `--baseline` adds a `without_skill` arm so the
+benchmark can attribute an effect to the skill rather than the base model.
 
 Each invocation creates `bench/eval-runs/<skill>/iteration-<N>/` and writes:
 
 - `triggers.json` — triggering results (per-query pass/fail, trigger rate, false-positive rate)
-- `eval-<id>-<slug>/with_skill/run-1/`
+- `eval-<id>-<slug>/<configuration>/run-<epoch>/` — one dir per epoch;
+  `<configuration>` is `with_skill` (and `without_skill` under `--baseline`)
   - `outputs/` — files the executor wrote (the eval prompts reference paths under here)
   - `transcript.md` — readable conversation log
   - `stream.jsonl` — raw `claude -p --output-format stream-json` output
-  - `eval_metadata.json` — prompt, expectations, model, timestamp
+  - `eval_metadata.json` — prompt, expectations, model, configuration, run index, timestamp
   - `timing.json` — executor + grader durations
   - `grading.json` — grader's verdicts (skill-creator schema)
-- `benchmark.json` / `benchmark.md` — aggregate stats across the iteration
+- `benchmark.json` / `benchmark.md` — aggregate stats across the iteration:
+  per-eval and suite-level pass_rate as **mean [95% CI]** (two-stage — epochs
+  reduced per eval, then clustered across evals so N epochs don't pose as N
+  independent samples), an `errored_runs` count (grader failures are excluded
+  from rates, never scored as 0%), and a paired `baseline_delta` under `--baseline`.
+  Git SHA + executor/grader models are stamped into `metadata` for provenance.
 
 ## Fixture pollution gotcha
 
@@ -74,6 +92,7 @@ python /path/to/skill-creator/eval-viewer/generate_review.py \
 
 ## Caveats / known limits
 
-- **No "without_skill" baseline.** This driver only runs `with_skill`. Producing a clean baseline requires running `claude -p` against a config that doesn't have the bully plugin loaded, which isn't trivial since the plugin is globally installed. Add a `--baseline` mode later if a delta becomes useful.
+- **`--baseline` disables *all* skills, not just the target.** The control arm passes `--disallowedTools Skill` to the executor, which blocks every skill (the plugin is globally installed, so there's no clean per-skill unload). The paired delta therefore measures "this skill vs. no skills" — a slight over-attribution if another skill would also have helped. Fine for the skill-vs-no-skill signal; tighten if a specific skill is a known confound.
+- **Default `--epochs 1` gives no error bars.** A single run reports `mean (n=1)` with a zero-width interval. That's a point estimate, not a measurement — pass `--epochs >=5` before comparing iterations or trusting a delta.
 - **Triggering detection is heuristic.** We look for the skill name in any tool call's serialized form. Claude Code's exact Skill-tool invocation shape may vary; if false negatives appear, refine `_detect_skill_invocation` in the driver.
 - **Grader is itself an LLM.** The grader can be wrong. For deterministic checks (exit codes, YAML key sets), encode them into the expectation text so the grader will shell out and verify.
